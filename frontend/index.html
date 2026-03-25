@@ -1,0 +1,65 @@
+<!--
+frontend/index.html — 웹 UI
+
+[역할]
+  웹 브라우저에서 분석 설정을 입력하고 결과를 확인하는 단일 페이지 애플리케이션.
+  외부 라이브러리 없이 순수 HTML/CSS/JS 로만 구현한다.
+
+[구성 섹션]
+  1) 헤더
+     - 로고(🔍 아이콘) + 서비스 이름 + 부제
+
+  2) 분석 설정 폼 (form#analyze-form)
+     - 소스 코드 파일 업로드: 드래그 앤 드롭 + 클릭 지원 (.py / .zip)
+     - 웹훅 수신 URL: 비우면 SAST만 실행
+     - HMAC 시크릿 키
+     - 상태 생성 경로 (Tier 1, 선택)
+     - 상태 조회 경로 템플릿 (Tier 1, 선택)
+     - 보안 분석 시작 버튼
+     - PDF 저장 버튼 (결과가 나온 후 표시)
+
+  3) 로딩 상태
+     - 스피너 애니메이션
+     - 분석 단계 안내 텍스트 (파일 파싱 → SAST → DAST → 리포트)
+
+  4) 결과 영역 (div#results)
+     - 등급 배너: 전체 점수(A~F) + SAST/DAST 탐지 건수
+     - 플랫폼 배지: 감지된 플랫폼 + 서명 헤더 + 알고리즘
+     - 플랫폼 공식 문서 링크 배너
+     - 라우터 분리 감지 경고 (has_router_split)
+     - DAST 연결 오류 경고
+     - 엔드포인트별 카드 (접기/펼치기)
+       · SAST 탭: Finding 목록 (severity, rule_id, message, 수정 코드 스니펫)
+       · DAST 탭: 공격별 결과 (취약/안전, 신뢰도, 상태 변화 감지 여부)
+     - 분석 파일 목록 (meta-row)
+
+[JavaScript 구성]
+  RULE_DOCS       : rule_id → 참고 문서 URL 매핑 딕셔너리
+  setFile()       : 드롭존 파일 선택 처리 (input change + drag & drop 공통)
+  submit handler  : POST /analyze 폼 전송 + 응답 렌더링
+  renderReport()  : FullReport JSON → HTML 변환
+  renderEndpoint(): 엔드포인트 카드 HTML 생성
+  renderSAST()    : SAST Finding 목록 HTML 생성
+  renderDAST()    : DAST 공격 결과 HTML 생성
+  escHtml()       : XSS 방지 HTML 이스케이프
+  toggleEndpoint(): 엔드포인트 카드 접기/펼치기
+  toggleFinding() : Finding 상세 접기/펼치기
+  switchTab()     : SAST / DAST 탭 전환
+
+[인쇄(PDF) 지원]
+  @media print CSS로 불필요한 UI 숨김,
+  모든 엔드포인트/Finding 자동 펼침, 흑백 색상 처리
+-->
+
+<!-- TODO: <head> 메타, CSS 변수 및 스타일 작성 -->
+<!-- TODO: <header> 섹션 작성 -->
+<!-- TODO: 분석 설정 폼 작성 (드래그 앤 드롭 드롭존 포함) -->
+<!-- TODO: 로딩 상태 UI 작성 -->
+<!-- TODO: 결과 영역 마크업 작성 -->
+<!-- TODO: <script> 섹션 작성
+       - RULE_DOCS 딕셔너리
+       - 드롭존 이벤트 핸들러
+       - 폼 제출 핸들러 (fetch POST /analyze)
+       - renderReport / renderEndpoint / renderSAST / renderDAST 함수
+       - 인터랙션 함수 (toggle, switchTab)
+-->
