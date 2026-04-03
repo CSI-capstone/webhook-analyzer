@@ -1,65 +1,529 @@
-<!--
-frontend/index.html — 웹 UI
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Webhook Security Analyzer</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
-[역할]
-  웹 브라우저에서 분석 설정을 입력하고 결과를 확인하는 단일 페이지 애플리케이션.
-  외부 라이브러리 없이 순수 HTML/CSS/JS 로만 구현한다.
+:root {
+  --bg:#0f1117; --surface:#1a1d27; --surface2:#22263a; --border:#2e3350;
+  --text:#e2e4f0; --muted:#6b7094; --accent:#5b6af0; --accent2:#7c8ff7;
+  --critical:#ff4d4f; --high:#ff7a00; --medium:#faad14; --low:#52c41a; --info:#1890ff;
+}
 
-[구성 섹션]
-  1) 헤더
-     - 로고(🔍 아이콘) + 서비스 이름 + 부제
+body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding-bottom:60px; }
 
-  2) 분석 설정 폼 (form#analyze-form)
-     - 소스 코드 파일 업로드: 드래그 앤 드롭 + 클릭 지원 (.py / .zip)
-     - 웹훅 수신 URL: 비우면 SAST만 실행
-     - HMAC 시크릿 키
-     - 상태 생성 경로 (Tier 1, 선택)
-     - 상태 조회 경로 템플릿 (Tier 1, 선택)
-     - 보안 분석 시작 버튼
-     - PDF 저장 버튼 (결과가 나온 후 표시)
+/* Layout */
+header { background:var(--surface); border-bottom:1px solid var(--border); padding:16px 32px; display:flex; align-items:center; gap:12px; }
+.logo { width:32px; height:32px; background:var(--accent); border-radius:8px; display:grid; place-items:center; font-size:16px; }
+header h1 { font-size:17px; font-weight:600; }
+header p  { font-size:12px; color:var(--muted); }
+.container { max-width:920px; margin:0 auto; padding:32px 20px 0; }
 
-  3) 로딩 상태
-     - 스피너 애니메이션
-     - 분석 단계 안내 텍스트 (파일 파싱 → SAST → DAST → 리포트)
+/* Card */
+.card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:24px; margin-bottom:20px; }
+.card-title { font-size:14px; font-weight:600; margin-bottom:18px; }
 
-  4) 결과 영역 (div#results)
-     - 등급 배너: 전체 점수(A~F) + SAST/DAST 탐지 건수
-     - 플랫폼 배지: 감지된 플랫폼 + 서명 헤더 + 알고리즘
-     - 플랫폼 공식 문서 링크 배너
-     - 라우터 분리 감지 경고 (has_router_split)
-     - DAST 연결 오류 경고
-     - 엔드포인트별 카드 (접기/펼치기)
-       · SAST 탭: Finding 목록 (severity, rule_id, message, 수정 코드 스니펫)
-       · DAST 탭: 공격별 결과 (취약/안전, 신뢰도, 상태 변화 감지 여부)
-     - 분석 파일 목록 (meta-row)
+/* Form */
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.form-group { display:flex; flex-direction:column; gap:5px; }
+.form-group.full { grid-column:1/-1; }
+label { font-size:12px; color:var(--muted); font-weight:500; }
+.req { color:var(--critical); margin-left:2px; }
+input[type="text"] {
+  background:var(--surface2); border:1px solid var(--border); border-radius:7px;
+  padding:9px 12px; font-size:14px; color:var(--text); outline:none; transition:border-color .2s;
+}
+input:focus { border-color:var(--accent); }
+input.input-error { border-color:var(--critical) !important; }
+.field-error-msg { font-size:11px; color:var(--critical); margin-top:4px; display:none; }
+.field-error-msg.visible { display:block; }
 
-[JavaScript 구성]
-  RULE_DOCS       : rule_id → 참고 문서 URL 매핑 딕셔너리
-  setFile()       : 드롭존 파일 선택 처리 (input change + drag & drop 공통)
-  submit handler  : POST /analyze 폼 전송 + 응답 렌더링
-  renderReport()  : FullReport JSON → HTML 변환
-  renderEndpoint(): 엔드포인트 카드 HTML 생성
-  renderSAST()    : SAST Finding 목록 HTML 생성
-  renderDAST()    : DAST 공격 결과 HTML 생성
-  escHtml()       : XSS 방지 HTML 이스케이프
-  toggleEndpoint(): 엔드포인트 카드 접기/펼치기
-  toggleFinding() : Finding 상세 접기/펼치기
-  switchTab()     : SAST / DAST 탭 전환
+/* Dropzone */
+.dropzone {
+  border:2px dashed var(--border); border-radius:8px; padding:28px 20px;
+  text-align:center; cursor:pointer; transition:.2s; position:relative;
+}
+.dropzone:hover,.dropzone.drag-over { border-color:var(--accent); background:rgba(91,106,240,.05); }
+.dropzone input[type="file"] { position:absolute; inset:0; opacity:0; cursor:pointer; }
+.dropzone-icon { font-size:28px; margin-bottom:8px; }
+.dropzone-text { font-size:13px; color:var(--muted); }
+.dropzone-text strong { color:var(--accent2); }
+.dropzone-hint { font-size:11px; color:var(--muted); margin-top:4px; }
+.file-name { display:none; align-items:center; gap:8px; justify-content:center; font-size:13px; font-weight:600; color:var(--low); }
+.dropzone.has-file { border-color:var(--low); }
+.dropzone.has-file .dropzone-icon,.dropzone.has-file .dropzone-text { display:none; }
+.dropzone.has-file .file-name { display:flex; }
 
-[인쇄(PDF) 지원]
-  @media print CSS로 불필요한 UI 숨김,
-  모든 엔드포인트/Finding 자동 펼침, 흑백 색상 처리
--->
+/* Buttons */
+.btn-row { display:flex; gap:8px; margin-top:18px; }
+.btn-analyze {
+  flex:1; padding:12px; background:var(--accent); color:#fff; border:none; border-radius:8px;
+  font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:.2s;
+}
+.btn-analyze:hover { background:var(--accent2); }
+.btn-analyze:disabled { opacity:.5; cursor:not-allowed; }
+.btn-print {
+  display:none; padding:12px 18px; background:var(--surface2); color:var(--text);
+  border:1px solid var(--border); border-radius:8px; font-size:13px; font-weight:500;
+  cursor:pointer; align-items:center; gap:6px; transition:.2s;
+}
+.btn-print:hover { border-color:var(--accent); }
+.btn-print.visible { display:flex; }
 
-<!-- TODO: <head> 메타, CSS 변수 및 스타일 작성 -->
-<!-- TODO: <header> 섹션 작성 -->
-<!-- TODO: 분석 설정 폼 작성 (드래그 앤 드롭 드롭존 포함) -->
-<!-- TODO: 로딩 상태 UI 작성 -->
-<!-- TODO: 결과 영역 마크업 작성 -->
-<!-- TODO: <script> 섹션 작성
-       - RULE_DOCS 딕셔너리
-       - 드롭존 이벤트 핸들러
-       - 폼 제출 핸들러 (fetch POST /analyze)
-       - renderReport / renderEndpoint / renderSAST / renderDAST 함수
-       - 인터랙션 함수 (toggle, switchTab)
--->
+/* Loading */
+#loading { display:none; flex-direction:column; align-items:center; gap:14px; padding:40px; text-align:center; }
+.spinner { width:36px; height:36px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+#results { display:none; }
+
+/* Grade banner */
+.grade-banner { border-radius:10px; padding:20px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-bottom:20px; }
+.grade-banner.grade-F { background:rgba(255,77,79,.12);  border:1px solid rgba(255,77,79,.35); }
+.grade-banner.grade-D { background:rgba(255,122,0,.1);   border:1px solid rgba(255,122,0,.3); }
+.grade-banner.grade-C { background:rgba(250,173,20,.08); border:1px solid rgba(250,173,20,.25); }
+.grade-banner.grade-A { background:rgba(82,196,26,.08);  border:1px solid rgba(82,196,26,.25); }
+.grade-score { font-size:44px; font-weight:700; line-height:1; }
+.grade-banner.grade-F .grade-score{color:var(--critical)}
+.grade-banner.grade-D .grade-score{color:var(--high)}
+.grade-banner.grade-C .grade-score{color:var(--medium)}
+.grade-banner.grade-A .grade-score{color:var(--low)}
+.grade-details h2 { font-size:16px; font-weight:600; margin-bottom:4px; }
+.grade-details p  { font-size:12px; color:var(--muted); }
+.grade-stats { display:flex; gap:20px; }
+.grade-stat  { text-align:center; }
+.grade-stat .num { font-size:26px; font-weight:700; }
+.grade-stat .lbl { font-size:11px; color:var(--muted); margin-top:2px; }
+.grade-stat.sast .num{color:var(--high)} .grade-stat.dast .num{color:var(--critical)}
+
+/* Badges */
+.platform-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:20px; }
+.badge { padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; border:1px solid; }
+.badge-github  { color:#7c8ff7; border-color:rgba(124,143,247,.4); background:rgba(124,143,247,.1); }
+.badge-stripe  { color:#a78bfa; border-color:rgba(167,139,250,.4); background:rgba(167,139,250,.1); }
+.badge-toss    { color:#60bbf7; border-color:rgba(96,187,247,.4);  background:rgba(96,187,247,.1); }
+.badge-slack   { color:#f0c060; border-color:rgba(240,192,96,.4);  background:rgba(240,192,96,.1); }
+.badge-portone { color:#60d0a0; border-color:rgba(96,208,160,.4);  background:rgba(96,208,160,.1); }
+.badge-generic { color:var(--muted); border-color:var(--border); background:var(--surface2); }
+.badge-tier1   { color:var(--low);    border-color:rgba(82,196,26,.4);  background:rgba(82,196,26,.08); }
+.badge-tier2   { color:var(--medium); border-color:rgba(250,173,20,.4); background:rgba(250,173,20,.08); }
+
+
+/* Warn / doc-link / error */
+.warn-box { background:rgba(250,173,20,.08); border:1px solid rgba(250,173,20,.3); border-radius:8px; padding:12px 16px; color:#faad14; font-size:13px; margin-bottom:14px; }
+.warn-box strong { display:block; margin-bottom:3px; }
+.doc-link-banner { background:rgba(91,106,240,.08); border:1px solid rgba(91,106,240,.25); border-radius:7px; padding:10px 14px; margin-bottom:16px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; }
+.doc-link-banner span{color:var(--muted)} .doc-link-banner a{color:var(--accent2);text-decoration:none;font-weight:500} .doc-link-banner a:hover{text-decoration:underline}
+.error-box { background:rgba(255,77,79,.1); border:1px solid rgba(255,77,79,.35); border-radius:8px; padding:18px 22px; color:#ff8080; font-size:14px; }
+.error-box strong { display:block; font-size:15px; margin-bottom:5px; color:var(--critical); }
+
+/* Endpoint cards */
+.endpoint-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:14px; overflow:hidden; }
+.endpoint-header { padding:12px 18px; display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none; }
+.endpoint-header:hover { background:rgba(255,255,255,.02); }
+.sev-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.sev-dot.CRITICAL{background:var(--critical)} .sev-dot.HIGH{background:var(--high)}
+.sev-dot.MEDIUM{background:var(--medium)} .sev-dot.LOW{background:var(--low)} .sev-dot.INFO{background:var(--info)}
+.endpoint-path { font-family:monospace; font-size:13px; font-weight:600; flex:1; }
+.endpoint-meta { display:flex; gap:7px; align-items:center; }
+.sev-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:4px; }
+.sev-badge.CRITICAL{background:rgba(255,77,79,.2);color:var(--critical)}
+.sev-badge.HIGH{background:rgba(255,122,0,.2);color:var(--high)}
+.sev-badge.MEDIUM{background:rgba(250,173,20,.2);color:var(--medium)}
+.sev-badge.LOW{background:rgba(82,196,26,.2);color:var(--low)}
+.sev-badge.INFO{background:rgba(24,144,255,.15);color:var(--info)}
+.cvss-score { font-size:11px; color:var(--muted); }
+.chevron { font-size:11px; color:var(--muted); transition:transform .2s; }
+.endpoint-card.expanded .chevron { transform:rotate(90deg); }
+.endpoint-body { display:none; border-top:1px solid var(--border); }
+.endpoint-card.expanded .endpoint-body { display:block; }
+
+/* Tabs */
+.tabs { display:flex; border-bottom:1px solid var(--border); }
+.tab-btn { padding:9px 18px; font-size:12px; font-weight:500; color:var(--muted); background:none; border:none; border-bottom:2px solid transparent; cursor:pointer; transition:.15s; margin-bottom:-1px; }
+.tab-btn.active { color:var(--accent2); border-bottom-color:var(--accent); }
+.tab-content { display:none; padding:18px; }
+.tab-content.active { display:block; }
+
+/* Findings */
+.finding { border:1px solid var(--border); border-radius:7px; margin-bottom:10px; overflow:hidden; }
+.finding-header { padding:10px 14px; display:flex; align-items:center; gap:8px; cursor:pointer; background:var(--surface2); }
+.finding-header:hover { background:rgba(255,255,255,.03); }
+.finding-rule  { font-family:monospace; font-size:11px; color:var(--muted); min-width:90px; }
+.finding-msg   { font-size:13px; flex:1; }
+.finding-line  { font-size:11px; color:var(--muted); }
+.finding-file  { font-size:11px; color:var(--muted); font-family:monospace; background:var(--surface); border:1px solid var(--border); border-radius:3px; padding:1px 5px; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.finding-body  { display:none; padding:12px 14px; border-top:1px solid var(--border); }
+.finding.open .finding-body { display:block; }
+.finding-rec { font-size:13px; color:var(--muted); margin-bottom:10px; }
+.finding-rec strong { color:var(--text); }
+pre.fix-snippet { background:#0d1117; border:1px solid var(--border); border-radius:5px; padding:12px; font-size:12px; font-family:monospace; color:#a8c8ff; overflow:auto; white-space:pre; line-height:1.6; max-height:260px; }
+.snippet-label { font-size:10px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
+.rule-doc-link { margin-top:10px; padding:7px 11px; background:rgba(91,106,240,.06); border:1px solid rgba(91,106,240,.2); border-radius:5px; font-size:12px; display:flex; align-items:center; gap:6px; }
+.rule-doc-link a { color:var(--accent2); text-decoration:none; }
+.rule-doc-link a:hover { text-decoration:underline; }
+
+/* DAST */
+.dast-confidence { font-size:12px; color:var(--muted); margin-bottom:12px; padding:9px 12px; background:var(--surface2); border-radius:5px; }
+.dast-item { border:1px solid var(--border); border-radius:7px; padding:12px 14px; margin-bottom:8px; display:flex; gap:12px; align-items:flex-start; }
+.dast-item.vuln{border-left:3px solid var(--critical)} .dast-item.safe{border-left:3px solid var(--low)}
+.dast-icon { font-size:16px; flex-shrink:0; }
+.dast-info { flex:1; }
+.dast-type  { font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.3px; margin-bottom:3px; }
+.dast-desc  { font-size:13px; font-weight:500; }
+.dast-details { font-size:12px; color:var(--muted); margin-top:5px; line-height:1.6; }
+.conf-badge { font-size:10px; font-weight:700; padding:2px 6px; border-radius:4px; flex-shrink:0; }
+.conf-badge.HIGH{background:rgba(255,77,79,.2);color:var(--critical)}
+.conf-badge.MEDIUM{background:rgba(250,173,20,.2);color:var(--medium)}
+.conf-badge.LOW{background:rgba(24,144,255,.15);color:var(--info)}
+.state-changed { margin-top:5px; font-size:12px; color:var(--critical); font-weight:600; }
+
+/* Misc */
+.empty-state { text-align:center; padding:28px; color:var(--muted); font-size:13px; }
+.empty-state span { display:block; font-size:24px; margin-bottom:8px; }
+.meta-row { font-size:11px; color:var(--muted); padding:10px 0; border-top:1px solid var(--border); margin-top:14px; }
+.meta-row strong { color:var(--text); }
+
+/* Print */
+.print-header { display:none; }
+@media print {
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  header,#form-card,#loading,.btn-print,.btn-row,.tabs,.tab-btn,.chevron{display:none!important}
+  body{background:#fff;color:#111;padding:0} .container{padding:0;max-width:100%}
+  .endpoint-body,.tab-content,.finding-body{display:block!important}
+  .card,.endpoint-card,.finding,.dast-item{border:1px solid #ccc!important;background:#fff!important;break-inside:avoid}
+  .endpoint-header{background:#f5f5f5!important} .finding-header{background:#f0f0f0!important}
+  .grade-score,.grade-details h2,.endpoint-path,.finding-msg,.dast-desc{color:#111!important}
+  .grade-details p,.finding-rule,.finding-line,.dast-type,.dast-details{color:#555!important}
+  .grade-banner{border:2px solid #999!important}
+  .grade-banner.grade-F .grade-score{color:#c00!important} .grade-banner.grade-A .grade-score{color:#060!important}
+  pre.fix-snippet{background:#f8f8f8!important;color:#222!important;border:1px solid #ddd!important;max-height:none!important;font-size:11px!important}
+  @page{margin:20mm 15mm}
+  .endpoint-card{page-break-inside:avoid} .grade-banner{page-break-after:avoid}
+  .print-header{display:block!important;font-size:18px;font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #333;color:#111}
+}
+
+@media(max-width:640px){
+  .form-grid{grid-template-columns:1fr}
+  header{padding:14px 18px} .container{padding:18px 14px 0}
+  .grade-banner{flex-direction:column} .grade-stats{gap:14px} .btn-row{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🔍</div>
+  <div>
+    <h1>Webhook Security Analyzer</h1>
+    <p>웹훅 핸들러 보안 취약점 자동 탐지 프레임워크</p>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card" id="form-card">
+    <div class="card-title">📂 분석 설정</div>
+    <form id="analyze-form">
+      <div class="form-group full" style="margin-bottom:14px">
+        <label>소스 코드 파일 <span class="req">*</span></label>
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="code-file" name="code" accept=".py,.zip" required>
+          <div class="dropzone-icon">📁</div>
+          <div class="dropzone-text"><strong>클릭하여 파일 선택</strong> 또는 드래그 앤 드롭</div>
+          <div class="dropzone-hint">.py 단일 파일 또는 .zip 압축 파일 (최대 10MB)</div>
+          <div class="file-name" id="file-name-display"><span>✅</span><span id="file-name-text"></span></div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>웹훅 수신 URL <span class="req">*</span></label>
+          <input type="text" name="webhook_url" id="webhook-url" placeholder="http://localhost:8000">
+          <span class="field-error-msg" id="url-error">웹훅 수신 URL을 입력해주세요.</span>
+        </div>
+        <div class="form-group">
+          <label>HMAC 시크릿 키 <span style="color:var(--muted);font-size:10px">(선택 — 비우면 재전송 공격 생략)</span></label>
+          <input type="text" name="secret" placeholder="예) mysecretkey123">
+          <span style="font-size:11px;color:var(--muted);margin-top:3px">테스트 서버의 시크릿 키를 입력하면 재전송 공격까지 검증합니다.</span>
+        </div>
+        <div class="form-group">
+          <label>상태 생성 경로 <span style="color:var(--muted);font-size:10px">(Tier 1, 선택)</span></label>
+          <input type="text" name="state_create" placeholder="예) /payments">
+        </div>
+        <div class="form-group">
+          <label>상태 조회 경로 템플릿</label>
+          <input type="text" name="state_query" placeholder="예) /payments/{id}">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button type="submit" class="btn-analyze" id="submit-btn"><span>🔍</span> 보안 분석 시작</button>
+        <button type="button" class="btn-print" id="print-btn" onclick="window.print()">🖨️ PDF 저장</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="loading" class="card">
+    <div class="spinner"></div>
+    <div>
+      <p style="font-size:14px;font-weight:600;margin-bottom:6px">분석 중...</p>
+      <div style="font-size:12px;color:var(--muted);line-height:2">
+        ⏳ 파일 업로드 및 파싱 중<br>🔎 정적 분석 (SAST) 실행 중<br>🌐 동적 분석 (DAST) 실행 중<br>📊 리포트 생성 중
+      </div>
+    </div>
+  </div>
+
+  <div id="results"></div>
+</div>
+
+<script>
+const RULE_DOCS = {
+  "WHSEC-001": { title:"OWASP 인증 체크리스트", url:"https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html" },
+  "WHSEC-002": { title:"Python hmac.compare_digest 공식 문서", url:"https://docs.python.org/3/library/hmac.html#hmac.compare_digest" },
+  "WHSEC-003": { title:"NIST 해시 알고리즘 가이드라인", url:"https://csrc.nist.gov/projects/hash-functions" },
+  "WHSEC-004": { title:"Stripe — 재전송 공격 방어 (타임스탬프 허용 오차)", url:"https://stripe.com/docs/webhooks/signatures#replay-attacks" },
+  "WHSEC-005": { title:"CWE-330 — 불충분한 검증 우회", url:"https://cwe.mitre.org/data/definitions/330.html" },
+};
+
+// 드롭존
+const dropzone     = document.getElementById('dropzone');
+const fileInput    = document.getElementById('code-file');
+const fileNameText = document.getElementById('file-name-text');
+
+function setFile(f) {
+  if (!f) return;
+  dropzone.classList.add('has-file');
+  fileNameText.textContent = `${f.name} (${(f.size/1024).toFixed(1)} KB)`;
+}
+fileInput.addEventListener('change', () => setFile(fileInput.files[0]));
+dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) { const dt = new DataTransfer(); dt.items.add(f); fileInput.files = dt.files; setFile(f); }
+});
+
+// 폼 제출
+document.getElementById('analyze-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const submitBtn = document.getElementById('submit-btn');
+  const printBtn  = document.getElementById('print-btn');
+  const loading   = document.getElementById('loading');
+  const results   = document.getElementById('results');
+  const urlInput  = document.getElementById('webhook-url');
+  const urlError  = document.getElementById('url-error');
+
+  // 웹훅 URL 유효성 검사
+  if (!urlInput.value.trim()) {
+    urlInput.classList.add('input-error');
+    urlError.classList.add('visible');
+    urlInput.focus();
+    return;
+  }
+  urlInput.classList.remove('input-error');
+  urlError.classList.remove('visible');
+
+  submitBtn.disabled = true;
+  printBtn.classList.remove('visible');
+  loading.style.display = 'flex';
+  results.style.display = 'none';
+  results.innerHTML = '';
+
+  const formData = new FormData(e.target);
+
+  try {
+    const resp = await fetch('/analyze', { method:'POST', body:formData });
+    const data = await resp.json();
+    loading.style.display = 'none';
+    results.style.display = 'block';
+    results.innerHTML = resp.ok ? renderReport(data) : renderError(data.detail || JSON.stringify(data));
+    if (resp.ok) { attachInteractivity(); printBtn.classList.add('visible'); }
+  } catch (err) {
+    loading.style.display = 'none';
+    results.style.display = 'block';
+    results.innerHTML = renderError(`네트워크 오류: ${err.message}`);
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+// URL 입력 시 에러 상태 해제
+document.getElementById('webhook-url').addEventListener('input', function() {
+  if (this.value.trim()) {
+    this.classList.remove('input-error');
+    document.getElementById('url-error').classList.remove('visible');
+  }
+});
+
+// 유틸
+function escHtml(s) {
+  return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function renderError(msg) {
+  return `<div class="error-box"><strong>분석 오류</strong>${escHtml(msg)}</div>`;
+}
+function gradeClass(g) {
+  return g.startsWith('F')?'grade-F':g.startsWith('D')?'grade-D':g.startsWith('C')?'grade-C':'grade-A';
+}
+function platformBadgeClass(name) {
+  return {'GitHub':'badge-github','Stripe':'badge-stripe','토스페이먼츠':'badge-toss','Slack':'badge-slack','PortOne V2':'badge-portone'}[name]||'badge-generic';
+}
+function tierBadge(tier) {
+  const cls  = {'Tier 1':'badge-tier1','Tier 2':'badge-tier2'}[tier]||'badge-tier2';
+  const hint = {'Tier 1':'상태 교차 검증','Tier 2':'상태 코드만'}[tier]||'';
+  return `<span class="badge ${cls}">${tier} — ${hint}</span>`;
+}
+
+// 렌더링
+function renderReport(data) {
+  const gc = gradeClass(data.overall_grade || '?');
+  const gradeChar = (data.overall_grade||'?')[0];
+  let html = `<div class="print-header">Webhook Security Analyzer — 분석 리포트</div>`;
+
+  html += `
+  <div class="grade-banner ${gc}">
+    <div style="display:flex;align-items:center;gap:18px">
+      <div class="grade-score">${gradeChar}</div>
+      <div class="grade-details">
+        <h2>${escHtml(data.overall_grade)}</h2>
+        <p>대상: ${escHtml(data.target_file)}${data.dast_ran?'':' · SAST only'}</p>
+        <p>분석 시간: ${data.elapsed_sec}초</p>
+      </div>
+    </div>
+    <div class="grade-stats">
+      <div class="grade-stat sast"><div class="num">${data.total_sast_findings}</div><div class="lbl">SAST 탐지</div></div>
+      <div class="grade-stat dast"><div class="num">${data.total_dast_vulns}</div><div class="lbl">DAST 취약점</div></div>
+    </div>
+  </div>`;
+
+  if (data.platform?.platform) {
+    const p = data.platform, cls = platformBadgeClass(p.platform);
+    html += `<div class="platform-row">
+      <span class="badge ${cls}">${escHtml(p.platform)}</span>
+      <span class="badge ${cls}">${escHtml(p.sig_header)}</span>
+      <span class="badge badge-generic">알고리즘: ${escHtml(p.algo||'sha256')}</span>
+      <span class="badge badge-generic">${escHtml(p.tier_hint||'')}</span>
+    </div>`;
+  }
+  if (data.platform_doc?.url) {
+    html += `<div class="doc-link-banner">📖 <span>플랫폼 공식 보안 가이드:</span>
+      <a href="${escHtml(data.platform_doc.url)}" target="_blank" rel="noopener">${escHtml(data.platform_doc.title)} ↗</a>
+    </div>`;
+  }
+  if (data.has_router_split) {
+    html += `<div class="warn-box"><strong>⚠ 라우터 분리 패턴 감지 (include_router / register_blueprint)</strong>핸들러가 여러 파일에 분산되어 있을 수 있습니다. zip으로 전체 프로젝트를 업로드하면 모든 파일을 분석합니다.</div>`;
+  }
+  if (data.dast_warnings?.length) {
+    html += `<div class="warn-box"><strong>⚠ DAST 연결 오류</strong>${data.dast_warnings.map(escHtml).join('<br>')}</div>`;
+  }
+  if (data.warning) {
+    html += `<div class="warn-box"><strong>⚠ 주의</strong>${escHtml(data.warning)}</div>`;
+  }
+  if (!data.endpoints?.length) {
+    html += `<div class="card"><div class="empty-state"><span>🔍</span>분석된 엔드포인트가 없습니다.</div></div>`;
+  } else {
+    data.endpoints.forEach((ep, i) => { html += renderEndpoint(ep, i); });
+  }
+  if (data.files_analyzed?.length) {
+    html += `<div class="meta-row"><strong>분석 파일:</strong> ${data.files_analyzed.map(escHtml).join(', ')}</div>`;
+  }
+  return html;
+}
+
+function renderEndpoint(ep, idx) {
+  const sev = ep.overall_severity;
+  const cvss = ep.overall_cvss ? `CVSS ${ep.overall_cvss.toFixed(1)}` : '';
+  const sastCnt  = ep.sast_findings.length;
+  const dastVuln = (ep.dast_results||[]).filter(a=>a.vulnerable).length;
+
+  return `
+  <div class="endpoint-card" id="ep-${idx}">
+    <div class="endpoint-header" onclick="toggleEndpoint('ep-${idx}')">
+      <div class="sev-dot ${sev}"></div>
+      <div class="endpoint-path">${escHtml(ep.path)}</div>
+      <div class="endpoint-meta">
+        ${tierBadge(ep.tier)}
+        <span class="sev-badge ${sev}">${sev}</span>
+        ${cvss?`<span class="cvss-score">${cvss}</span>`:''}
+        ${sastCnt>0?`<span style="font-size:11px;color:var(--high)">SAST ${sastCnt}</span>`:''}
+        ${dastVuln>0?`<span style="font-size:11px;color:var(--critical)">DAST ${dastVuln}</span>`:''}
+      </div>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab(this,'sast-${idx}')">정적 분석 (SAST)${sastCnt>0?` <span style="color:var(--high)">${sastCnt}</span>`:''}</button>
+        <button class="tab-btn"        onclick="switchTab(this,'dast-${idx}')">동적 분석 (DAST)${dastVuln>0?` <span style="color:var(--critical)">${dastVuln}</span>`:''}</button>
+      </div>
+      <div class="tab-content active" id="sast-${idx}">${renderSAST(ep.sast_findings, idx)}</div>
+      <div class="tab-content"        id="dast-${idx}">${renderDAST(ep.dast_results||[], ep.dast_confidence, ep.combined_note)}</div>
+    </div>
+  </div>`;
+}
+
+function renderSAST(findings, epIdx) {
+  if (!findings?.length) return `<div class="empty-state"><span>✅</span>정적 분석 취약점 없음</div>`;
+  return findings.map((f, i) => {
+    const fid     = `f-${epIdx}-${i}`;
+    const fname   = f.filepath ? f.filepath.split('/').pop() : '';
+    const docInfo = RULE_DOCS[f.rule_id];
+    const docHtml = docInfo
+      ? `<div class="rule-doc-link">📚 참고 문서: <a href="${escHtml(docInfo.url)}" target="_blank" rel="noopener">${escHtml(docInfo.title)} ↗</a></div>`
+      : '';
+    return `
+    <div class="finding" id="${fid}">
+      <div class="finding-header" onclick="toggleFinding('${fid}')">
+        <span class="sev-badge ${f.severity}">${f.severity}</span>
+        <span class="finding-rule">${escHtml(f.rule_id)}</span>
+        <span class="finding-msg">${escHtml(f.message)}</span>
+        ${fname?`<span class="finding-file" title="${escHtml(f.filepath)}">📄 ${escHtml(fname)}</span>`:''}
+        <span class="finding-line">L${f.lineno}</span>
+      </div>
+      <div class="finding-body">
+        ${f.recommendation?`<div class="finding-rec"><strong>수정 방법:</strong> ${escHtml(f.recommendation)}</div>`:''}
+        ${f.fix_snippet?`<div class="snippet-label">수정 코드 스니펫</div><pre class="fix-snippet">${escHtml(f.fix_snippet)}</pre>`:''}
+        ${docHtml}
+        ${f.cvss_score?`<div style="font-size:11px;color:var(--muted);margin-top:8px">CVSS: ${f.cvss_score}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderDAST(results, confidence, combined_note) {
+  const typeLabel = { downgrade:'다운그레이드 공격', replay:'재전송 공격', type_confusion:'타입 혼동 공격' };
+  let html = confidence
+    ? `<div class="dast-confidence">📡 동적 분석 신뢰도: <strong>${escHtml(confidence)}</strong>${combined_note?' | '+escHtml(combined_note):''}</div>`
+    : '';
+  if (!results?.length)
+    return html + `<div class="empty-state"><span>⚪</span>동적 분석 결과 없음 (URL 미입력 또는 서버 미응답)</div>`;
+  results.forEach(a => {
+    html += `
+    <div class="dast-item ${a.vulnerable?'vuln':'safe'}">
+      <div class="dast-icon">${a.vulnerable?'🔴':'🟢'}</div>
+      <div class="dast-info">
+        <div class="dast-type">${escHtml(typeLabel[a.attack_type]||a.attack_type)}</div>
+        <div class="dast-desc">${escHtml(a.description)}</div>
+        ${a.details?.length?`<div class="dast-details">${a.details.map(escHtml).join('<br>')}</div>`:''}
+        ${a.state_changed?`<div class="state-changed">⚠ 상태 변화 감지 — DB 변경 확인됨 (Tier 1)</div>`:''}
+      </div>
+      ${a.vulnerable?`<span class="conf-badge ${a.confidence}">${a.confidence}</span>`:''}
+    </div>`;
+  });
+  return html;
+}
+
+// 인터랙션
+function attachInteractivity() { const f = document.querySelector('.endpoint-card'); if (f) f.classList.add('expanded'); }
+function toggleEndpoint(id) { document.getElementById(id).classList.toggle('expanded'); }
+function toggleFinding(id)  { document.getElementById(id).classList.toggle('open'); }
+function switchTab(btn, contentId) {
+  const body = btn.closest('.endpoint-body');
+  body.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  body.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(contentId).classList.add('active');
+}
+</script>
+</body>
+</html>
