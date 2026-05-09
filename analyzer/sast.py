@@ -2,17 +2,16 @@
 analyzer/sast.py
 
 정적 분석(SAST) — 5개 규칙 통합 + 수정 코드 스니펫
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 규칙 목록:
-  WHSEC-001  서명 검증 누락         [V1]  CRITICAL
-  WHSEC-002  타이밍 공격 (==비교)   [V2]  HIGH
-  WHSEC-003  취약한 해시 알고리즘   [V3]  MEDIUM/CRITICAL
-  WHSEC-004  타임스탬프 검증 누락   [V4]  MEDIUM
-  WHSEC-005  외부 파일 위임 결함    [V5]  MEDIUM/CRITICAL
+  WHSEC-001  서명 검증 누락
+  WHSEC-002  타이밍 공격 (== 비교)
+  WHSEC-003  취약한 해시 알고리즘
+  WHSEC-004  타임스탬프 검증 누락
+  WHSEC-005  외부 파일 위임 결함
 
-각 규칙은 Finding + 자동 수정 코드 스니펫(fix_snippet)을 생성합니다.
-Tier에 따라 SAST 동작 자체는 달라지지 않습니다 (SAST는 소스코드 기반).
+각 규칙은 Finding 객체와 함께 자동 수정 코드 스니펫(fix_snippet)을 생성합니다.
+SAST는 소스코드 기반으로 동작하며 Tier에 따른 동작 차이는 없습니다.
 """
 import ast
 import os
@@ -27,9 +26,7 @@ from analyzer.engine import (
 )
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 데이터 구조
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Severity(Enum):
     CRITICAL = "CRITICAL"
     HIGH = "HIGH"
@@ -50,13 +47,11 @@ class Finding:
     end_lineno: Optional[int] = None
     cvss_score: float = 0.0
     recommendation: str = ""
-    fix_snippet: str = ""       # ← 자동 수정 코드 스니펫
+    fix_snippet: str = ""
     code_snippet: str = ""
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 상수
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VERIFY_CALL_PATTERNS = {"hmac.new", "hmac.compare_digest", "hmac.digest"}
 VERIFY_NAME_KEYWORDS = {"verify", "validate", "check_sig", "check_signature"}
 SIG_VAR_KEYWORDS = {"sig", "signature", "hash", "computed", "expected",
@@ -64,8 +59,10 @@ SIG_VAR_KEYWORDS = {"sig", "signature", "hash", "computed", "expected",
                      "stripe_signature"}
 WEAK_ALGORITHMS = {"sha1", "md5"}
 TIMESTAMP_KEYWORDS = {"timestamp", "time", "ts", "nonce", "expires"}
-# 버그 8 수정: 문자열 상수 검색 시 오탐 방지를 위해 명확한 타임스탬프 헤더명만 허용
-# "time", "ts" 같은 짧은 단어는 부분 매칭으로 오탐 발생 가능 ("X-Request-Timeout" 등)
+
+# 헤더 문자열 검색은 명확한 타임스탬프 헤더명으로만 제한한다.
+# "time", "ts" 같은 짧은 단어는 부분 매칭 시 "X-Request-Timeout" 같은
+# 무관한 헤더에도 반응해 오탐이 발생할 수 있기 때문이다.
 TIMESTAMP_HEADER_STRINGS = {
     "x-timestamp",
     "x-slack-request-timestamp",
@@ -79,9 +76,7 @@ SKIP_MODULES = {"fastapi", "flask", "django", "starlette", "pydantic",
                 "typing", "logging", "stripe", "requests", "httpx", "aiohttp"}
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 수정 코드 스니펫 템플릿
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FIX_SNIPPETS = {
     "WHSEC-001": '''\
 # ── 수정: 서명 검증 추가 ──
@@ -169,9 +164,7 @@ def {func}(signature: str, payload: bytes, secret: bytes) -> bool:
 }
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # SAST 엔진
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class SASTEngine:
     """정적 분석 5개 규칙 통합 실행"""
 
@@ -185,11 +178,9 @@ class SASTEngine:
     def analyze(self, pr: ParseResult) -> List[Finding]:
         findings = []
 
-        # ── 파일 단위 사전 점검 ──
-
-        # 피드백 4: 동적 import(importlib) 감지 → INFO Finding 생성
-        # AST 정적 분석은 런타임에 결정되는 import를 추적할 수 없으므로
-        # 발견 즉시 "DAST로 검증 대체" 안내를 리포트에 표시합니다.
+        # importlib 등 동적 import가 감지된 경우 INFO Finding을 생성한다.
+        # 런타임에 결정되는 import 경로는 AST 정적 분석으로 추적할 수 없으므로
+        # DAST 동적 분석 결과를 함께 참고하도록 안내한다.
         dynamic_imports = self._ast_engine.detect_dynamic_imports(pr.tree)
         for name, lineno in dynamic_imports:
             findings.append(Finding(
@@ -213,9 +204,7 @@ class SASTEngine:
             findings.extend(self._rule_05(handler, pr))
         return findings
 
-    # ──────────────────────────────────────────────────────
     # WHSEC-001: 서명 검증 누락
-    # ──────────────────────────────────────────────────────
     def _rule_01(self, h: WebhookHandler, pr: ParseResult) -> List[Finding]:
         calls = [c[0] for c in collect_calls(h.ast_node)]
         if self._has_verify(calls):
@@ -249,9 +238,7 @@ class SASTEngine:
             code_snippet=h.source_code[:300],
         )]
 
-    # ──────────────────────────────────────────────────────
     # WHSEC-002: 타이밍 공격 (== 비교)
-    # ──────────────────────────────────────────────────────
     def _rule_02(self, h: WebhookHandler, pr: ParseResult) -> List[Finding]:
         findings = []
         findings.extend(self._check_eq(h.ast_node, h, pr, ""))
@@ -284,9 +271,7 @@ class SASTEngine:
                     ))
         return findings
 
-    # ──────────────────────────────────────────────────────
     # WHSEC-003: 취약한 해시 알고리즘
-    # ──────────────────────────────────────────────────────
     def _rule_03(self, h: WebhookHandler, pr: ParseResult) -> List[Finding]:
         findings = []
         findings.extend(self._check_hash(h.ast_node, h, pr, ""))
@@ -326,19 +311,16 @@ class SASTEngine:
         return findings
 
     def _extract_algo(self, node):
-        # 기존: hashlib.md5 형태 (ast.Attribute)
+        # hashlib.sha1 형태 (ast.Attribute)
         if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
             if node.value.id == "hashlib" and node.attr in WEAK_ALGORITHMS:
                 return node.attr
-        # 버그 2 수정: from hashlib import md5 후 md5 직접 사용 형태 (ast.Name)
-        # 예) hmac.new(secret, payload, md5)  →  ast.Name(id='md5')
+        # from hashlib import sha1 후 sha1을 직접 사용하는 형태 (ast.Name)
         if isinstance(node, ast.Name) and node.id in WEAK_ALGORITHMS:
             return node.id
         return ""
 
-    # ──────────────────────────────────────────────────────
     # WHSEC-004: 타임스탬프 검증 누락
-    # ──────────────────────────────────────────────────────
     def _rule_04(self, h: WebhookHandler, pr: ParseResult) -> List[Finding]:
         if not self._handler_has_sig(h, pr):
             return []
@@ -376,8 +358,8 @@ class SASTEngine:
             for arg in node.args.args:
                 if any(kw in arg.arg.lower() for kw in TIMESTAMP_KEYWORDS):
                     return True
-        # 버그 8 수정: 문자열 상수 검색은 명확한 타임스탬프 헤더명으로만 제한
-        # (포함 검색 → 정확한 매칭으로 변경하여 "X-Request-Timeout" 등 오탐 방지)
+        # 문자열 상수 검색은 명확한 헤더명으로만 제한한다.
+        # 부분 매칭을 허용하면 "X-Request-Timeout" 같은 무관한 헤더도 걸릴 수 있다.
         for child in ast.walk(node):
             if isinstance(child, ast.Constant) and isinstance(child.value, str):
                 if child.value.lower() in TIMESTAMP_HEADER_STRINGS:
@@ -396,18 +378,14 @@ class SASTEngine:
                         return True
         return False
 
-    # ──────────────────────────────────────────────────────
     # WHSEC-005: 외부 파일 위임 결함
-    # ──────────────────────────────────────────────────────
     def _rule_05(self, h: WebhookHandler, pr: ParseResult,
                  _visited: Set[str] = None) -> List[Finding]:
         """
-        외부 파일 위임 결함 탐지.
+        핸들러가 import한 외부 함수 내부의 취약점을 추적 탐지한다.
 
-        _visited: 이미 탐색한 파일 경로 집합.
-                  순환 참조(A→B→A) 발생 시 무한루프를 방지합니다.
-                  최대 추적 깊이: 현재 파일 기준 1단계
-                  (발표 방어 논리 "2단계까지만 추적" = 핸들러→외부파일 1단계)
+        _visited: 이미 탐색한 파일 경로 집합. 순환 참조(A→B→A) 발생 시
+                  무한루프를 방지한다. 추적 깊이는 핸들러 파일 기준 1단계로 제한한다.
         """
         if _visited is None:
             _visited = {pr.filepath}
@@ -423,10 +401,9 @@ class SASTEngine:
             if root in SKIP_MODULES:
                 continue
 
-            # 버그 24 수정: pr.project_root 전달 — zip 업로드 임시 폴더 구조에서
-            # 외부 파일을 올바르게 찾기 위해 필요 (누락 시 WHSEC-005가 항상 INFO로 나옴)
+            # zip 업로드 시 임시 폴더 구조에서 외부 파일을 올바르게 찾으려면
+            # project_root를 함께 전달해야 한다.
             ext_pr = self._ast_engine.resolve_import(imp, pr.filepath, pr.project_root)
-            # 순환 참조 방지: 이미 탐색한 파일이면 건너뜀
             if ext_pr is not None and ext_pr.filepath in _visited:
                 continue
             if ext_pr is not None:
@@ -464,7 +441,7 @@ class SASTEngine:
                             rule_name="외부 위임 타이밍 공격",
                             severity=Severity.MEDIUM,
                             message=f"'{imp.module}.{imp.name}()'에서 서명을 == 비교.",
-                            filepath=pr.filepath, handler_name=h.name,
+                            filepath=ext_pr.filepath, handler_name=h.name,
                             lineno=getattr(cmp, "lineno", 0),
                             cvss_score=6.5,
                             recommendation=f"{imp.module}.py에서 compare_digest 사용",
@@ -472,6 +449,7 @@ class SASTEngine:
                         ))
 
             # 취약 해시 탐지
+            # MD5는 CVSS 9.1 CRITICAL, SHA1은 6.5 MEDIUM으로 분리 적용한다.
             for child in ast.walk(ext_func.ast_node):
                 if not isinstance(child, ast.Call):
                     continue
@@ -479,9 +457,6 @@ class SASTEngine:
                 if cn == "hmac.new" and len(child.args) >= 3:
                     algo = self._extract_algo(child.args[2])
                     if algo in WEAK_ALGORITHMS:
-                        # SHA1 vs MD5 분리: WHSEC-003과 동일한 기준 적용
-                        # MD5 → AC:Low, C:High → 9.1 CRITICAL
-                        # SHA1 → AC:High, C:Low → 6.5 MEDIUM
                         sev   = Severity.CRITICAL if algo == "md5" else Severity.MEDIUM
                         score = 9.1               if algo == "md5" else 6.5
                         findings.append(Finding(
@@ -489,7 +464,7 @@ class SASTEngine:
                             rule_name="외부 위임 취약 해시",
                             severity=sev,
                             message=f"'{imp.module}.{imp.name}()'에서 {algo.upper()} 사용.",
-                            filepath=pr.filepath, handler_name=h.name,
+                            filepath=ext_pr.filepath, handler_name=h.name,
                             lineno=getattr(child, "lineno", 0),
                             cvss_score=score,
                             recommendation=f"{imp.module}.py에서 hashlib.{algo} → hashlib.sha256",
@@ -497,7 +472,7 @@ class SASTEngine:
                         ))
         return findings
 
-    # ── 공통 헬퍼 ──
+    # 공통 헬퍼
     def _has_verify(self, calls):
         for name in calls:
             if name in VERIFY_CALL_PATTERNS:
