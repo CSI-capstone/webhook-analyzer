@@ -1,5 +1,5 @@
 """
-vulnerable_webhook.py
+samples/vulnerable_webhook.py
 
 SAST 탐지 대상 파일.
 아래 취약점이 의도적으로 포함되어 있습니다:
@@ -28,17 +28,13 @@ app = FastAPI()
 
 SECRET = b"supersecretkey"
 
-# ────────────────────────────────────────────────────────────
 # 주문 상태 DB (Tier 1 상태 교차 검증용)
 # key: order_id, value: 현재 상태 ("pending" | "paid" | "cancelled")
-# ────────────────────────────────────────────────────────────
 _order_db: dict[str, str] = {}
 
 
-# ────────────────────────────────────────────────────────────
 # [V1] 서명 검증 자체가 없음
 #      위조 요청을 보내도 수락 → DB 상태 변경됨 (Tier 1 탐지 가능)
-# ────────────────────────────────────────────────────────────
 @app.post("/webhook/no-verify")
 async def webhook_no_verify(request: Request):
     payload = await request.body()
@@ -51,9 +47,7 @@ async def webhook_no_verify(request: Request):
     return {"status": "ok", "received": data}
 
 
-# ────────────────────────────────────────────────────────────
 # [V2] 타이밍 공격에 취약한 == 비교
-# ────────────────────────────────────────────────────────────
 @app.post("/webhook/timing-attack")
 async def webhook_timing_attack(
     request: Request,
@@ -76,9 +70,7 @@ async def webhook_timing_attack(
     raise HTTPException(status_code=401, detail="Invalid signature")
 
 
-# ────────────────────────────────────────────────────────────
 # [V3-a] 취약한 해시 알고리즘 — SHA1
-# ────────────────────────────────────────────────────────────
 @app.post("/webhook/weak-hash-sha1")
 async def webhook_weak_hash_sha1(
     request: Request,
@@ -101,9 +93,7 @@ async def webhook_weak_hash_sha1(
     return {"status": "ok"}
 
 
-# ────────────────────────────────────────────────────────────
 # [V3-b] 취약한 해시 알고리즘 — MD5
-# ────────────────────────────────────────────────────────────
 @app.post("/webhook/weak-hash-md5")
 async def webhook_weak_hash_md5(
     request: Request,
@@ -126,9 +116,7 @@ async def webhook_weak_hash_md5(
     return {"status": "ok"}
 
 
-# ────────────────────────────────────────────────────────────
 # [V4] 타임스탬프 검증 없음 → 재전송 공격에 무방비
-# ────────────────────────────────────────────────────────────
 @app.post("/webhook/no-timestamp")
 async def webhook_no_timestamp(
     request: Request,
@@ -152,9 +140,7 @@ async def webhook_no_timestamp(
     return {"status": "ok"}
 
 
-# ────────────────────────────────────────────────────────────
 # [V5-a] 동일 파일 내 위임 — _verify_delegated() 에 == 결함
-# ────────────────────────────────────────────────────────────
 def _verify_delegated(signature: str, payload: bytes) -> bool:
     """위임된 검증 함수 — 내부에서 == 비교 사용 (타이밍 공격 취약)."""
     computed = "sha256=" + hmac.new(SECRET, payload, hashlib.sha256).hexdigest()
@@ -180,11 +166,9 @@ async def webhook_delegated(
     return {"status": "ok"}
 
 
-# ────────────────────────────────────────────────────────────
 # [V5-b] 외부 파일 import 위임 — utils_vulnerable.verify_signature()
 #         핸들러 코드만 보면 문제없어 보이지만,
 #         import 추적 없이는 내부 == 결함을 발견할 수 없음
-# ────────────────────────────────────────────────────────────
 @app.post("/webhook/delegated-external")
 async def webhook_delegated_external(
     request: Request,
@@ -205,9 +189,7 @@ async def webhook_delegated_external(
     return {"status": "ok"}
 
 
-# ────────────────────────────────────────────────────────────
 # 상태 조회 엔드포인트 (Tier 1 Probe 테스트용)
-# ────────────────────────────────────────────────────────────
 @app.post("/orders")
 async def create_order(request: Request):
     data = await request.json()

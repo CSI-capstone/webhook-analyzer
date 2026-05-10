@@ -1,5 +1,5 @@
 """
-utils_vulnerable.py
+samples/utils_vulnerable.py
 
 SAST 규칙 5 — 외부 파일 import 추적 테스트용.
 이 파일의 verify_signature() 는 == 비교를 사용하는 결함이 있습니다.
