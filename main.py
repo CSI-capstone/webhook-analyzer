@@ -2,7 +2,6 @@
 main.py
 
 웹훅 보안 취약점 자동 탐지 프레임워크 — 메인 진입점
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 사용법:
   python main.py \\
@@ -46,7 +45,7 @@ import os
 import sys
 import time
 
-# ── 경로 설정 (모듈 임포트를 위해 프로젝트 루트를 sys.path에 추가) ──
+# 경로 설정 (모듈 임포트를 위해 프로젝트 루트를 sys.path에 추가)
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
@@ -69,10 +68,7 @@ try:
 except ImportError:
     _PLATFORM_AVAILABLE = False
 
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # CLI 파서
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="webhook-analyzer",
@@ -119,9 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 유틸리티
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def _banner():
     print("\n" + "=" * 68)
     print("  웹훅 핸들러 보안 취약점 자동 탐지 프레임워크")
@@ -146,9 +140,7 @@ def _err(msg: str):
     print(f"  ✗ {msg}", file=sys.stderr)
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 메인 파이프라인
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def run(args: argparse.Namespace) -> int:
     """
     전체 파이프라인 실행.
@@ -157,11 +149,11 @@ def run(args: argparse.Namespace) -> int:
     _banner()
     t_start = time.time()
 
-    # ── 입력 검증 ──
+    # 입력 검증 
     if not os.path.isfile(args.code):
         _err(f"파일을 찾을 수 없습니다: {args.code}")
         return 2
-    # 버그 21 수정: 두 플래그 동시 사용 차단
+    # 두 플래그 동시 사용 차단
     if args.sast_only and args.dast_only:
         _err("--sast-only와 --dast-only를 동시에 사용할 수 없습니다.")
         return 2
@@ -177,9 +169,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"  상태 생성 : {args.state_create}")
     print(f"  상태 조회 : {args.state_query}")
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # [1] AST 파싱
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     _section("[1] 코드 파싱")
     engine = WebhookASTEngine()
     try:
@@ -200,9 +190,7 @@ def run(args: argparse.Namespace) -> int:
     if not pr.handlers:
         _warn("웹훅 핸들러가 없습니다. 경로에 webhook/hook/callback/notify/event 키워드가 있는지 확인하세요.")
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # [2] 플랫폼 감지
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     _section("[2] 플랫폼 감지")
     sig_format = None
     if _PLATFORM_AVAILABLE:
@@ -218,9 +206,7 @@ def run(args: argparse.Namespace) -> int:
     else:
         _warn("platform.py를 찾을 수 없습니다. 기본 서명 형식(X-Hub-Signature-256)으로 진행합니다.")
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # [3] 정적 분석 (SAST)
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     sast_findings = []
     if not args.dast_only:
         _section("[3] 정적 분석 (SAST)")
@@ -238,9 +224,7 @@ def run(args: argparse.Namespace) -> int:
     else:
         _warn("--dast-only 옵션: SAST 건너뜀")
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # [4] 동적 분석 (DAST)
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     probes = {}       # path → ProbeResult
     all_attacks = {}  # path → List[AttackResult]
     all_endpoint_paths = []
@@ -248,13 +232,13 @@ def run(args: argparse.Namespace) -> int:
     if not args.sast_only and args.url:
         _section("[4] 동적 분석 (DAST)")
 
-        # ── 서명 헤더 결정 ──
+        # 서명 헤더 결정
         if sig_format:
             sig_header = sig_format.sig_header
         else:
             sig_header = "X-Hub-Signature-256"
 
-        # ── DAST 설정 ──
+        # DAST 설정
         cfg = DastConfig(
             base_url=args.url.rstrip("/"),
             secret=args.secret.encode() if args.secret else b"",
@@ -269,7 +253,7 @@ def run(args: argparse.Namespace) -> int:
         )
         dast = DASTEngine(cfg)
 
-        # ── 대상 엔드포인트 결정 ──
+        # 대상 엔드포인트 결정
         if args.endpoints:
             # 사용자가 직접 지정
             target_paths = args.endpoints
@@ -287,7 +271,7 @@ def run(args: argparse.Namespace) -> int:
         if not target_paths:
             _warn("분석할 엔드포인트를 찾지 못했습니다. --endpoint 옵션으로 직접 지정하세요.")
         else:
-            # ── Probe → Tier 결정 ──
+            # Probe → Tier 결정
             print(f"\n  Probe (Tier 분류):")
             for path in target_paths:
                 probe = dast.probe(path, sig_header)
@@ -300,7 +284,7 @@ def run(args: argparse.Namespace) -> int:
                       f"  1:{probe.step1_code}{flag}  2:{probe.step2_code}"
                       f"  3:{probe.step3_code}  상태:{'✓' if probe.step4_state_ok else '✗'}")
 
-            # ── 공격 실행 ──
+            # 공격 실행
             print(f"\n  공격 (다운그레이드 + 재전송 + 타입혼동):")
             for path in target_paths:
                 probe = probes[path]
@@ -321,9 +305,7 @@ def run(args: argparse.Namespace) -> int:
         if args.sast_only:
             _warn("--sast-only 옵션: DAST 건너뜀")
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # [5] 통합 리포트 생성
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     _section("[5] 통합 리포트")
 
     # 핸들러 이름 → 경로 매핑
@@ -347,7 +329,7 @@ def run(args: argparse.Namespace) -> int:
         else:
             unmatched_sast.append(f)
 
-    # 버그 3 수정: unmatched_sast를 첫 번째 엔드포인트에 fallback 매핑하여 누락 방지
+    # 매핑되지 않은 Finding을 첫 번째 엔드포인트에 fallback 추가하여 누락 방지
     if unmatched_sast and ep_sast:
         first_ep = next(iter(ep_sast))
         for f in unmatched_sast:
@@ -357,9 +339,8 @@ def run(args: argparse.Namespace) -> int:
     if args.sast_only or not all_endpoint_paths:
         ep_reports = []
         seen_paths = set()
-        # 버그 1 수정: 모듈 레벨 Finding(WHSEC-006, WHSEC-DYN)은 handler_name이
-        # "(모듈 레벨)" 또는 "(파일 전체)"이므로 핸들러 이름 필터에서 누락됨
-        # → 별도로 수집하여 첫 번째 핸들러에만 포함
+        # 모듈 레벨 Finding(WHSEC-DYN)은 handler_name이 "(모듈 레벨)" 또는 "(파일 전체)"이므로
+        # 핸들러 이름 필터에서 누락됨 → 별도로 수집하여 첫 번째 핸들러에만 포함
         MODULE_LEVEL_NAMES = {"(모듈 레벨)", "(파일 전체)"}
         module_findings = [
             f for f in sast_findings
@@ -372,7 +353,7 @@ def run(args: argparse.Namespace) -> int:
                 continue
             seen_paths.add(path)
             h_findings = [f for f in sast_findings if f.handler_name == h.name]
-            # 버그 1 수정: 첫 번째 핸들러에 모듈 레벨 Finding 포함
+            # 첫 번째 핸들러에 모듈 레벨 Finding 포함
             if not module_assigned:
                 h_findings = h_findings + module_findings
                 module_assigned = True
@@ -410,9 +391,7 @@ def run(args: argparse.Namespace) -> int:
     return 1 if has_vuln else 0
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 진입점
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def main():
     parser = build_parser()
     args = parser.parse_args()
