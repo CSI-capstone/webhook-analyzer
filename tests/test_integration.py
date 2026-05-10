@@ -111,7 +111,7 @@ def main():
     print(f"  서버 시작: {BASE}")
 
     try:
-        dast = DASTEngine(DastConfig(base_url=BASE))
+        dast = DASTEngine(DastConfig(base_url=BASE, secret=b"supersecretkey"))
 
         # Probe
         h2("Probe — Tier 분류")
@@ -203,6 +203,7 @@ def main():
             reset_db()
             p_cfg = DastConfig(
                 base_url=BASE,
+                secret=b"supersecretkey",
                 sig_header=sig_hdr,
                 platform_name=pname,
                 is_stripe=is_stripe,
@@ -238,7 +239,7 @@ def main():
             if p and p in ep_sast:
                 ep_sast[p].append(f)
 
-        # 모듈 레벨 Finding(WHSEC-006 등)은 handler_name이 "(모듈 레벨)"이라
+        # 모듈 레벨 Finding은 handler_name이 "(모듈 레벨)"이라
         # handler_to_path 매핑에서 누락됨 → 첫 번째 엔드포인트에 fallback 추가
         MODULE_LEVEL_NAMES = {"(모듈 레벨)", "(파일 전체)"}
         unmatched_module = [
