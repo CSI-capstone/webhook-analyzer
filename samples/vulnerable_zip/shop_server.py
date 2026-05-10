@@ -5,7 +5,7 @@ shop_server.py — 단국 굿즈샵 (취약한 버전)
 
 
 [WebhookFilter 입력값]
-  소스코드         : vulnerable_shop.zip (이 파일 + webhook_utils.py)
+  소스코드         : vulnerable_zip.zip (이 파일 + webhook_utils.py)
   웹훅 URL         : http://localhost:8000
   HMAC 시크릿 키   : dku-toss-secret-2026
   상태 생성 경로   : /orders
