@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
 """
 tests/test_integration.py
 
 D14 — 전체 파이프라인 End-to-End 통합 테스트
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 실행 순서:
   1) SAST: vulnerable_webhook.py 분석 → 7건 Finding 확인
@@ -69,9 +67,6 @@ def check(label, ok):
 def main():
     all_ok = True
 
-    # ═══════════════════════════════════════════════════════
-    # PHASE 1: 정적 분석 (SAST)
-    # ═══════════════════════════════════════════════════════
     h1("PHASE 1: 정적 분석 (SAST)")
     sast = SASTEngine()
 
@@ -107,9 +102,6 @@ def main():
     print(f"  Finding: {len(safe_findings)}건")
     all_ok &= check("안전 서버 0건 (오탐 없음)", len(safe_findings) == 0)
 
-    # ═══════════════════════════════════════════════════════
-    # PHASE 2: 동적 분석 (DAST)
-    # ═══════════════════════════════════════════════════════
     h1("PHASE 2: 동적 분석 (DAST)")
 
     # 서버 기동
@@ -142,7 +134,7 @@ def main():
         all_attacks = {}
         for ep in WEBHOOK_ENDPOINTS:
             reset_db()
-            # 버그 18 수정: 엔드포인트별 서명 헤더를 run_all에 전달
+            # 엔드포인트별 서명 헤더를 run_all에 전달
             attacks = dast.run_all(ep, probes[ep], SIG_MAP[ep])
             all_attacks[ep] = attacks
             vulns = [a for a in attacks if a.vulnerable]
@@ -153,7 +145,6 @@ def main():
             else:
                 print(f"  🟢 {ep:30s} 전공격 거부")
 
-        # DAST 검증
         h2("DAST 검증")
 
         # V1: 다운그레이드(서명없음) 수락
@@ -161,9 +152,8 @@ def main():
         all_ok &= check("V1 서명없음 수락",
                          any(a.vulnerable and a.attack_type == AttackType.DOWNGRADE for a in nv))
 
-        # V2: 타이밍 공격 (== 비교) — SAST로만 검증, DAST REPLAY는 V4(/webhook/no-timestamp)로 수행
-        # 버그 6 수정: /webhook/timing-attack은 타임스탬프를 정상 검증하므로 REPLAY 거부됨
-        # V2 엔드포인트의 취약점은 == 비교(타이밍 공격)이므로 SAST 결과로 검증
+        # V2: 타이밍 공격 (== 비교) — /webhook/timing-attack은 타임스탬프를 정상 검증하므로 DAST REPLAY는 거부됨
+        # == 비교 취약점은 SAST 결과로 검증
         ta_sast = [f for f in vuln_findings
                    if f.handler_name == "webhook_timing_attack"
                    and f.rule_id == "WHSEC-002"]
@@ -195,9 +185,6 @@ def main():
         all_ok &= check("S 타입혼동 거부 (안전)",
                          all(not a.vulnerable for a in tc_safe))
 
-        # ═══════════════════════════════════════════════════
-        # PHASE 2.5: 플랫폼별 엔드포인트 검증
-        # ═══════════════════════════════════════════════════
         h1("PHASE 2.5: 플랫폼별 엔드포인트 검증")
 
         PLATFORM_CASES = [
@@ -231,9 +218,6 @@ def main():
                 for a in p_vulns:
                     print(f"       🔴 {a.attack_type.value:16s} {a.confidence.value} | {a.description[:45]}")
 
-        # ═══════════════════════════════════════════════════
-        # PHASE 3: 등급 결정 + 리포트
-        # ═══════════════════════════════════════════════════
         h1("PHASE 3: 등급 결정 + 리포트")
 
         # 엔드포인트별 SAST Finding 매핑
@@ -289,9 +273,6 @@ def main():
     finally:
         srv.shutdown()
 
-    # ═══════════════════════════════════════════════════════
-    # 최종 요약
-    # ═══════════════════════════════════════════════════════
     h1("최종 결과")
     if all_ok:
         print("  🎉 전체 파이프라인 통과!")
