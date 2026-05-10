@@ -26,7 +26,7 @@ from typing import List, Tuple
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_EXTENSIONS = {".py"}          # 압축 해제 후 분석 대상 확장자
-ALLOWED_UPLOAD_EXTENSIONS = {".py", ".zip"}  # 버그 19 수정: 업로드 허용 확장자 상수 분리
+ALLOWED_UPLOAD_EXTENSIONS = {".py", ".zip"}  # 업로드 허용 확장자 상수 분리
 
 
 class UploadError(Exception):
@@ -50,7 +50,7 @@ def process_upload(file_bytes: bytes, filename: str) -> Tuple[str, List[str]]:
         raise UploadError(f"파일 크기 초과: {len(file_bytes) // 1024}KB (최대 10MB)")
 
     ext = Path(filename).suffix.lower()
-    if ext not in ALLOWED_UPLOAD_EXTENSIONS:  # 버그 19 수정: 상수 사용
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:  # 상수 사용
         raise UploadError(f"지원하지 않는 파일 형식: {ext} (.py 또는 .zip 만 허용)")
 
     tmp_dir = tempfile.mkdtemp(prefix="webhook_analyzer_")
@@ -77,7 +77,7 @@ def process_upload(file_bytes: bytes, filename: str) -> Tuple[str, List[str]]:
 
 def _extract_zip(file_bytes: bytes, dest_dir: str) -> List[str]:
     """zip 파일을 dest_dir에 압축 해제하고 .py 파일 목록 반환."""
-    # 버그 10 수정: 압축 해제 후 총 크기를 추적하여 zip bomb 방어
+    # 압축 해제 후 총 크기를 추적하여 zip bomb 방어
     MAX_EXTRACT_SIZE = 50 * 1024 * 1024  # 50MB
     total_extracted = 0
 
@@ -100,7 +100,7 @@ def _extract_zip(file_bytes: bytes, dest_dir: str) -> List[str]:
                 target = os.path.join(dest_dir, member.filename)
                 os.makedirs(os.path.dirname(target), exist_ok=True)
 
-                # 버그 1 수정: src.read() 전체 읽기 → 청크 단위 스트리밍으로 변경
+                # src.read() 전체 읽기 → 청크 단위 스트리밍으로 변경
                 # 이유 A: member.file_size는 zip 헤더 메타데이터라 공격자가 조작 가능
                 #         → 실제 읽은 바이트 수를 직접 누적해야 진짜 방어가 됨
                 # 이유 B: 전체를 한 번에 read()하면 대용량 파일 시 OOM 위험
