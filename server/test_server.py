@@ -2,7 +2,6 @@
 server/test_server.py
 
 stdlib http.server 기반 테스트 서버
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 취약 엔드포인트 (vulnerable_webhook.py 대응):
   POST /webhook/no-verify          [V1] 서명 없음
@@ -43,7 +42,7 @@ def _sig256(payload): return "sha256=" + hmac.new(SECRET, payload, hashlib.sha25
 def _sig1(payload): return "sha1=" + hmac.new(SECRET, payload, hashlib.sha1).hexdigest()
 def _sigmd5(payload): return "md5=" + hmac.new(SECRET, payload, hashlib.md5).hexdigest()
 
-# ── 플랫폼별 서명 헬퍼 ───────────────────────────────────────────────
+# 플랫폼별 서명 헬퍼
 import base64
 
 def _sig_stripe(ts: str, payload: bytes) -> str:
@@ -105,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
             "/webhook/weak-hash-md5": self._v3b,
             "/webhook/no-timestamp": self._v4,
             "/webhook/secure": self._safe,
-            # ── 플랫폼별 취약 엔드포인트 ──
+            # 플랫폼별 취약 엔드포인트
             "/webhook/stripe": self._stripe,
             "/webhook/toss": self._toss,
             "/webhook/slack": self._slack,
@@ -130,14 +129,14 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "Not found"})
 
-    # ── [V1] 서명 없음 ──
+    # [V1] 서명 없음
     def _v1(self, body):
         try: data = json.loads(body)
         except: data = {}
         self._update_db(data)
         self._json(200, {"status": "ok", "received": data})
 
-    # ── [V2] == 비교 ──
+    # [V2] == 비교
     def _v2(self, body):
         sig = self.headers.get("X-Hub-Signature-256")
         if not sig:
@@ -149,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"status": "ok"})
         self._json(401, {"detail": "Invalid signature"})
 
-    # ── [V3a] SHA1 ──
+    # [V3a] SHA1
     def _v3a(self, body):
         sig = self.headers.get("X-Hub-Signature")
         if not sig:
@@ -161,7 +160,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"status": "ok"})
         self._json(401, {"detail": "Invalid signature"})
 
-    # ── [V3b] MD5 ──
+    # [V3b] MD5 
     def _v3b(self, body):
         sig = self.headers.get("X-Signature")
         if not sig:
@@ -173,7 +172,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"status": "ok"})
         self._json(401, {"detail": "Invalid signature"})
 
-    # ── [V4] 타임스탬프 미검증 ──
+    # [V4] 타임스탬프 미검증
     def _v4(self, body):
         sig = self.headers.get("X-Hub-Signature-256")
         if not sig:
@@ -185,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
         self._update_db(data)
         self._json(200, {"status": "ok"})
 
-    # ── [S] 안전 ──
+    # [S] 안전
     def _safe(self, body):
         # Content-Type 검증 (타입 혼동 방어)
         ct = self.headers.get("Content-Type", "")
@@ -219,7 +218,7 @@ class Handler(BaseHTTPRequestHandler):
         self._update_db(data)
         self._json(200, {"status": "ok", "received": data})
 
-    # ── [Stripe] 취약: 타임스탬프 미검증 ──
+    # [Stripe] 취약: 타임스탬프 미검증
     # 실제 Stripe 서명 형식(t=<ts>,v1=<sig>)을 검증하되
     # 타임스탬프 유효기간 체크 없음 → 재전송 공격에 취약
     def _stripe(self, body):
@@ -245,7 +244,7 @@ class Handler(BaseHTTPRequestHandler):
         self._update_db(data)
         self._json(200, {"status": "ok"})
 
-    # ── [토스페이먼츠] 취약: == 비교 (타이밍 공격) ──
+    # [토스페이먼츠] 취약: == 비교 (타이밍 공격)
     # Base64 HMAC-SHA256 형식을 검증하되
     # hmac.compare_digest 대신 == 비교 → 타이밍 공격에 취약
     def _toss(self, body):
@@ -260,7 +259,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"status": "ok"})
         self._json(401, {"detail": "Invalid signature"})
 
-    # ── [Slack] 취약: 타임스탬프 미검증 ──
+    # [Slack] 취약: 타임스탬프 미검증
     # v0=HMAC(secret, v0:<ts>:<body>) 형식을 검증하되
     # 타임스탬프 유효기간 체크 없음 → 재전송 공격에 취약
     def _slack(self, body):
@@ -279,7 +278,7 @@ class Handler(BaseHTTPRequestHandler):
         self._update_db(data)
         self._json(200, {"status": "ok"})
 
-    # ── [PortOne V2] 취약: 서명 검증 누락 ──
+    # [PortOne V2] 취약: 서명 검증 누락
     # webhook-signature 헤더가 있어도 실제 검증 로직 없음
     # → 어떤 서명이든 수락
     def _portone(self, body):
@@ -293,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
         self._update_db(data)
         self._json(200, {"status": "ok"})
 
-    # ── 주문 ──
+    # 주문
     def _create_order(self, body):
         with _db_lock:
             oid = str(len(_order_db) + 1)
