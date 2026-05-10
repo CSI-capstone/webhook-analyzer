@@ -1,5 +1,5 @@
 """
-demo/shop_server.py
+samples/shop_server.py
 
   단국 굿즈샵 — TossPayments 결제 연동 서버 (시연용)
 
@@ -11,7 +11,7 @@ demo/shop_server.py
   → WebhookFilter에 코드를 입력하면 취약점을 자동으로 찾아줍니다.
 
 [WebhookFilter 입력값]
-  소스코드         : demo/shop_server.py (이 파일)
+  소스코드         : shop_server.py (이 파일)
   웹훅 URL         : http://localhost:8000
   HMAC 시크릿 키   : dku-toss-secret-2026
   상태 생성 경로   : /orders
@@ -191,14 +191,10 @@ async def get_order(order_id: str):
 
 
 # TossPayments 웹훅 수신 엔드포인트
-#
 # [의도된 취약점 — WebhookFilter 탐지 대상]
-#
 #   WHSEC-002  (HIGH)   : 서명 비교에 == 연산자 사용
 #                         → 타이밍 공격으로 시크릿 키 추측 가능
-#
-#   WHSEC-004  (MEDIUM) : "toss-timestamp" 헤더를 읽지만
-#                         time.time()과 비교하지 않음
+#   WHSEC-004  (MEDIUM) : "toss-timestamp" 헤더를 읽지만 time.time()과 비교하지 않음
 #                         → 만료된 요청 재전송(Replay) 공격 가능
 @app.post("/webhook/toss-payment")
 async def toss_payment_webhook(
@@ -229,7 +225,6 @@ async def toss_payment_webhook(
     # [취약점 WHSEC-004]
     # toss-timestamp 헤더를 읽기는 하지만,
     # 현재 시각(time.time())과 비교하지 않아 재전송 공격에 취약합니다.
-    #
     # 안전한 코드:
     #   import time
     #   ts = request.headers.get("toss-timestamp")
@@ -246,7 +241,6 @@ async def toss_payment_webhook(
     # == 연산자로 서명을 비교하면 Python이 문자를 앞에서부터 하나씩 비교하다가
     # 불일치하는 즉시 False를 반환합니다.
     # 공격자는 응답 시간 차이를 측정해 올바른 서명을 추측할 수 있습니다.
-    #
     # 안전한 코드:
     #   if not hmac.compare_digest(tosspayments_webhook_signature, expected):
     #       raise HTTPException(401, "서명이 올바르지 않습니다.")
