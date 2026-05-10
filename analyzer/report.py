@@ -2,7 +2,6 @@
 analyzer/report.py
 
 D12-D13 — 등급 결정 엔진 + 리포트 출력
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 SAST + DAST 결과를 통합하여:
   1) CVSS v3.1 기반 등급 결정 (CRITICAL / HIGH / MEDIUM / LOW)
@@ -16,9 +15,7 @@ from analyzer.sast import Finding, Severity
 from analyzer.dast import AttackResult, ProbeResult, Tier, Confidence, AttackType
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 통합 리포트 데이터
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 @dataclass
 class EndpointReport:
     """엔드포인트 하나에 대한 통합 리포트"""
@@ -42,9 +39,7 @@ class FullReport:
     overall_grade: str = ""
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 등급 결정
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SEV_ORDER = {Severity.CRITICAL: 4, Severity.HIGH: 3,
              Severity.MEDIUM: 2, Severity.LOW: 1, Severity.INFO: 0}
 
@@ -98,8 +93,7 @@ def compute_full_report(
 ) -> FullReport:
     """전체 리포트 생성"""
     r = FullReport(target_file=target_file, endpoints=endpoint_reports)
-    # 버그 23 수정: INFO 등급(WHSEC-DYN 등) 제외하고 실제 취약점만 집계
-    # INFO 1건만 있어도 A → C 강등되는 오동작 방지
+    # INFO 등급(WHSEC-DYN 등)은 실제 취약점이 아니므로 집계에서 제외
     r.total_sast_findings = sum(
         len([f for f in er.sast_findings if f.severity != Severity.INFO])
         for er in endpoint_reports
@@ -127,9 +121,7 @@ def compute_full_report(
     return r
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 텍스트 리포트 출력
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def print_report(report: FullReport):
     W = 70
     print("\n" + "=" * W)

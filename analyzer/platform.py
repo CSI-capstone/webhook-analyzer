@@ -1,14 +1,10 @@
 """
-analyzer/platform.py  (v2 — Step 1 고도화)
+analyzer/platform.py
 
 플랫폼 감지 모듈 — 소스 코드에서 웹훅 서명 플랫폼을 자동 판별
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-v2 변경 사항:
-  TOSS_PAYMENTS  — tosspayments-webhook-signature 헤더
-  SLACK          — X-Slack-Signature 헤더 (v0=sha256_sig 형식)
-  PORTONE_V2     — webhook-signature 헤더 (Standard Webhooks 준수)
-  기존: GITHUB, STRIPE, GENERIC, UNKNOWN 유지
+지원 플랫폼: GitHub, Stripe, 토스페이먼츠(tosspayments-webhook-signature),
+            Slack(X-Slack-Signature), PortOne V2(webhook-signature), Generic, Unknown
 """
 
 import ast
@@ -20,9 +16,7 @@ from typing import Optional, List
 from analyzer.engine import ParseResult, WebhookHandler
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 데이터 구조
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Platform(Enum):
     GITHUB        = "GitHub"
     STRIPE        = "Stripe"
@@ -53,9 +47,7 @@ class PlatformDetectionResult:
     evidence: List[str] = field(default_factory=list)
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 헤더 변수명 → 플랫폼 매핑  (Python snake_case 파라미터명)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 _GITHUB_HEADERS = {
     "x_hub_signature_256",
     "x_hub_signature",
@@ -83,13 +75,11 @@ _GENERIC_HEADERS = {
     "x_signature",
     "x_webhook_signature",
     "x_secret",
-    # 버그 11 수정: "webhook_signature"는 _PORTONE_HEADERS와 중복 → 제거
+    # "webhook_signature"는 _PORTONE_HEADERS와 중복되므로 제외
     # PortOne 검사가 Generic보다 먼저 수행되므로, 중복 시 일반 핸들러가 PortOne으로 오탐됨
 }
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 소스 문자열 패턴 (대소문자 무관)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 _TOSS_PATTERNS = [
     r"tosspayments[\-_]webhook[\-_]signature",
     r"TossPayments",
@@ -103,8 +93,7 @@ _STRIPE_PATTERNS = [
     r"stripe\.Webhook",
 ]
 _GITHUB_PATTERNS = [
-    # 버그 12 수정: r"sha256=" 제거 — GitHub과 무관한 코드에도 광범위하게 등장하여 오탐 위험
-    # (일반 HMAC 코드, 토스페이먼츠, WHSEC-003 수정 스니펫 등에도 포함됨)
+    # r"sha256="는 일반 HMAC 코드, 토스페이먼츠 등 GitHub과 무관한 코드에도 광범위하게 등장하므로 오탐 방지를 위해 제외
     r"X-Hub-Signature-256",
     r"x_hub_signature_256",
     r"github.*webhook",
@@ -122,9 +111,7 @@ _PORTONE_PATTERNS = [
     r"Standard[\s_]Webhooks",
 ]
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 플랫폼별 기본 SignatureFormat
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 _DEFAULT_FORMATS = {
     Platform.GITHUB: SignatureFormat(
         platform=Platform.GITHUB,
@@ -179,9 +166,7 @@ _DEFAULT_FORMATS = {
     ),
 }
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 플랫폼 공식 문서 링크
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PLATFORM_DOC_LINKS = {
     Platform.GITHUB: {
         "title": "GitHub Webhooks — 서명 검증 공식 가이드",
@@ -230,9 +215,7 @@ RULE_DOC_LINKS = {
 }
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 플랫폼 감지 엔진
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class PlatformDetector:
 
     def detect(self, pr: ParseResult) -> PlatformDetectionResult:
@@ -283,9 +266,7 @@ class PlatformDetector:
             evidence=evidence,
         )
 
-    # ──────────────────────────────────────────────────────
     # 내부 헬퍼
-    # ──────────────────────────────────────────────────────
     def _detect_from_params(self, handlers: list, evidence: List[str]) -> Platform:
         for handler in handlers:
             node = handler.ast_node

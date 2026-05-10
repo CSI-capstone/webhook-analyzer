@@ -2,7 +2,6 @@
 analyzer/serializer.py
 
 SAST / DAST / Report 결과 객체를 JSON 직렬화 가능한 dict 로 변환
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 from typing import Any
 
@@ -11,9 +10,7 @@ from analyzer.dast import AttackResult, ProbeResult, AttackType, Confidence, Tie
 from analyzer.report import EndpointReport, FullReport
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Finding (SAST)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def finding_to_dict(f: Finding) -> dict:
     return {
         "rule_id":       f.rule_id,
@@ -31,9 +28,7 @@ def finding_to_dict(f: Finding) -> dict:
     }
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # AttackResult (DAST)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def attack_result_to_dict(a: AttackResult) -> dict:
     return {
         "attack_type":   a.attack_type.value,
@@ -48,9 +43,7 @@ def attack_result_to_dict(a: AttackResult) -> dict:
     }
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ProbeResult
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def probe_result_to_dict(p: ProbeResult) -> dict:
     return {
         "endpoint":        p.endpoint,
@@ -62,13 +55,11 @@ def probe_result_to_dict(p: ProbeResult) -> dict:
         "step3_body":      p.step3_body,       # 유효 서명 응답 본문 (디버깅용)
         "step4_state_ok":  p.step4_state_ok,
         "details":         p.details,
-        "connection_error": p.connection_error, # 버그 16 수정: v2 신규 필드 추가 (연결 오류 사유)
+        "connection_error": p.connection_error, # 연결 오류 사유
     }
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # EndpointReport
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def endpoint_report_to_dict(er: EndpointReport) -> dict:
     return {
         "path":             er.path,
@@ -82,9 +73,7 @@ def endpoint_report_to_dict(er: EndpointReport) -> dict:
     }
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # FullReport  ← 최종 API 응답에 사용
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def full_report_to_dict(report: FullReport) -> dict:
     return {
         "target_file":         report.target_file,

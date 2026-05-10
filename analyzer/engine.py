@@ -1,16 +1,11 @@
 """
-analyzer/engine.py  (v2 — Step 2 고도화)
+analyzer/engine.py
 
 코어 엔진 — AST 파서 + 라우트 추출
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-변경 사항 (v2):
-  - ParseResult 에 project_root 필드 추가
-  - _find_project_root(): __init__.py 없는 첫 상위 디렉터리를 루트로 판단
-  - resolve_import() 고도화:
-      탐색 순서 1) 같은 디렉터리 (상대 import)
-               2) 프로젝트 루트 기준 절대 경로 (from app.core.security import …)
-               3) module/__init__.py 패키지 형태
-  - include_router 패턴 감지: 라우터 분리 구조 경고
+
+ParseResult는 project_root 필드를 포함하며, __init__.py 유무를 기반으로 프로젝트 루트를 자동 감지한다.
+resolve_import()는 같은 디렉터리 → 프로젝트 루트 절대 경로 → 패키지(__init__.py) 순으로 파일을 탐색한다.
+include_router / register_blueprint 패턴이 감지되면 라우터 분리 구조 경고를 표시한다.
 """
 import ast
 import os
@@ -19,9 +14,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Set, Tuple
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 데이터 클래스
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 @dataclass
 class WebhookHandler:
     name: str
@@ -75,14 +68,12 @@ class ParseResult:
     imports: List[ImportInfo]
     routes: List[RouteEndpoint]
     source_lines: List[str]
-    project_root: str = ""          # ← v2 추가: 프로젝트 루트 경로
-    has_router_split: bool = False  # ← v2 추가: include_router 패턴 감지 여부
+    project_root: str = ""          # 프로젝트 루트 경로
+    has_router_split: bool = False  # include_router 패턴 감지 여부
     errors: List[str] = field(default_factory=list)
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 상수
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WEBHOOK_PATH_KEYWORDS = ["webhook", "hook", "callback", "notify", "event"]
 
 # 경로 키워드가 없더라도 서명 헤더 파라미터가 있으면 웹훅 핸들러로 판단.
@@ -102,9 +93,7 @@ WEBHOOK_SIG_PARAMS = {
 }
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 유틸리티 함수 (SAST 규칙에서도 사용)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def get_call_name(call_node: ast.Call) -> str:
     func = call_node.func
     if isinstance(func, ast.Name):
@@ -131,9 +120,8 @@ def collect_comparisons(node: ast.AST) -> List[ast.Compare]:
 
 
 def called_function_names(node: ast.AST) -> Set[str]:
-    # 버그 17 수정: ast.Name(단순 호출)만 잡던 것을 ast.Attribute(메서드 호출)까지 확장
-    # 기존: verify()만 탐지
-    # 수정: self.verify(), utils.check_sig(), validator.verify_hmac() 등도 탐지
+    # ast.Name(단순 호출)과 ast.Attribute(메서드 호출)을 모두 수집
+    # self.verify(), utils.check_sig(), validator.verify_hmac() 등 다양한 호출 형태 탐지 가능
     names = set()
     for c in ast.walk(node):
         if not isinstance(c, ast.Call):
@@ -150,9 +138,7 @@ def var_to_header(var_name: str) -> str:
     return "-".join(p.capitalize() for p in var_name.split("_"))
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 엔진
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class WebhookASTEngine:
 
     def parse_file(self, filepath: str, project_root: str = "") -> ParseResult:
@@ -198,9 +184,7 @@ class WebhookASTEngine:
             has_router_split=has_router_split,
         )
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # v2: 프로젝트 루트 자동 감지
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # 프로젝트 루트 자동 감지
     def _find_project_root(self, filepath: str) -> str:
         """
         파일 경로에서 프로젝트 루트를 찾아 반환.
@@ -228,9 +212,7 @@ class WebhookASTEngine:
                 return current
             current = parent
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # v2: include_router 패턴 감지
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # include_router 패턴 감지
     def _detect_router_split(self, tree: ast.Module) -> bool:
         """
         app.include_router() 또는 blueprint.register_blueprint() 호출을 감지.
@@ -245,9 +227,7 @@ class WebhookASTEngine:
                 return True
         return False
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # import 추출
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def _extract_imports(self, tree: ast.Module) -> List[ImportInfo]:
         out = []
         for node in ast.walk(tree):
@@ -259,17 +239,13 @@ class WebhookASTEngine:
                     out.append(ImportInfo(a.name, a.name, a.asname, node.lineno))
         return out
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 함수 정의 수집
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def _extract_functions(self, tree: ast.Module) -> Dict[str, FunctionInfo]:
         return {node.name: FunctionInfo(node.name, node.lineno, node)
                 for node in ast.walk(tree)
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 웹훅 핸들러 식별
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def _find_handlers(self, tree: ast.Module, src: List[str]) -> List[WebhookHandler]:
         handlers = []
         for node in ast.walk(tree):
@@ -302,9 +278,7 @@ class WebhookASTEngine:
                 break
         return handlers
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 라우트 추출 (DAST용)
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def _extract_routes(self, tree: ast.Module) -> List[RouteEndpoint]:
         routes = []
         for node in ast.walk(tree):
@@ -317,7 +291,7 @@ class WebhookASTEngine:
                 path, method = info
                 path_params = re.findall(r"\{(\w+)\}", path)
                 header_params = self._extract_header_params(node)
-                # 버그 4 수정: 경로 키워드 OR 서명 파라미터명 중 하나라도 해당하면 웹훅으로 판단
+                # 경로 키워드 OR 서명 파라미터명 중 하나라도 해당하면 웹훅으로 판단
                 # (_find_handlers()와 동일한 기준 적용)
                 is_webhook = any(kw in path.lower() for kw in WEBHOOK_PATH_KEYWORDS) or \
                              any(arg.arg.lower() in WEBHOOK_SIG_PARAMS
@@ -370,9 +344,7 @@ class WebhookASTEngine:
                     params.append(HeaderParam(arg.arg, var_to_header(arg.arg), req))
         return params
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 동적 import 감지 (importlib / __import__)
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def detect_dynamic_imports(self, tree: ast.Module) -> list:
         """
         importlib.import_module() 또는 __import__() 사용을 감지.
@@ -398,9 +370,7 @@ class WebhookASTEngine:
                 found.append((name, getattr(node, "lineno", 0)))
         return found
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # v2: 외부 파일 파싱 (고도화된 경로 해석)
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # 외부 파일 파싱
     def resolve_import(self, imp: ImportInfo, base_filepath: str,
                        project_root: str = "") -> Optional[ParseResult]:
         """
