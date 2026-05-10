@@ -88,15 +88,15 @@ WEBHOOK_SECRET = os.environ["WEBHOOK_SECRET"].encode()
 @app.post("{route}")
 async def {func}(
     request: Request,
-    x_hub_signature_256: str = Header(None),
+    {sig_param}: str = Header(None),
 ):
     payload = await request.body()
-    if x_hub_signature_256 is None:
+    if {sig_param} is None:
         raise HTTPException(401, "Missing signature")
     expected = "sha256=" + hmac.new(
         WEBHOOK_SECRET, payload, hashlib.sha256
     ).hexdigest()
-    if not hmac.compare_digest(x_hub_signature_256, expected):
+    if not hmac.compare_digest({sig_param}, expected):
         raise HTTPException(401, "Invalid signature")
     data = await request.json()
     # ... 안전하게 처리 ...
@@ -106,9 +106,9 @@ async def {func}(
     "WHSEC-002": '''\
 # ── 수정: == 대신 hmac.compare_digest 사용 ──
 # 변경 전 (취약):
-#   if signature == computed:
+#   if {left} == {right}:
 # 변경 후 (안전):
-if hmac.compare_digest(signature, computed):
+if hmac.compare_digest({left}, {right}):
     # 서명 일치 — 처리 진행
     pass
 ''',
@@ -116,25 +116,27 @@ if hmac.compare_digest(signature, computed):
     "WHSEC-003-sha1": '''\
 # ── 수정: SHA1 → SHA256 교체 ──
 # 변경 전 (취약):
-#   computed = hmac.new(secret, payload, hashlib.sha1).hexdigest()
+#   computed = hmac.new({secret}, {payload}, hashlib.sha1).hexdigest()
 # 변경 후 (안전):
 computed = "sha256=" + hmac.new(
-    secret, payload, hashlib.sha256
+    {secret}, {payload}, hashlib.sha256
 ).hexdigest()
 ''',
 
     "WHSEC-003-md5": '''\
 # ── 수정: MD5 → SHA256 교체 ──
 # 변경 전 (취약):
-#   computed = hmac.new(secret, payload, hashlib.md5).hexdigest()
+#   computed = hmac.new({secret}, {payload}, hashlib.md5).hexdigest()
 # 변경 후 (안전):
 computed = "sha256=" + hmac.new(
-    secret, payload, hashlib.sha256
+    {secret}, {payload}, hashlib.sha256
 ).hexdigest()
 ''',
 
-    "WHSEC-004": '''\
+    "WHSEC-004-header": '''\
 # ── 수정: 타임스탬프 검증 추가 ──
+
+# [1단계] 파일 상단 (import 아래)에 추가
 import time
 
 TIMESTAMP_TOLERANCE = 300  # 5분
@@ -146,9 +148,30 @@ def verify_timestamp(timestamp_str: str) -> bool:
         return False
     return abs(time.time() - ts) <= TIMESTAMP_TOLERANCE
 
-# 핸들러 내부에서:
-x_timestamp = request.headers.get("X-Timestamp")
-if not x_timestamp or not verify_timestamp(x_timestamp):
+# [2단계] 핸들러 내부, 서명 검증 직전에 추가
+{ts_var} = request.headers.get("{ts_header}")
+if not {ts_var} or not verify_timestamp({ts_var}):
+    raise HTTPException(401, "Timestamp expired or invalid")
+''',
+
+    "WHSEC-004-param": '''\
+# ── 수정: 타임스탬프 검증 추가 ──
+
+# [1단계] 파일 상단 (import 아래)에 추가
+import time
+
+TIMESTAMP_TOLERANCE = 300  # 5분
+
+def verify_timestamp(timestamp_str: str) -> bool:
+    try:
+        ts = int(timestamp_str)
+    except (ValueError, TypeError):
+        return False
+    return abs(time.time() - ts) <= TIMESTAMP_TOLERANCE
+
+# [2단계] 핸들러 내부, 서명 검증 직전에 추가
+# ({ts_var} 는 이미 파라미터로 받고 있으므로 그대로 사용)
+if not {ts_var} or not verify_timestamp({ts_var}):
     raise HTTPException(401, "Timestamp expired or invalid")
 ''',
 
@@ -224,7 +247,17 @@ class SASTEngine:
                 if any(kw in imp.name.lower() for kw in VERIFY_NAME_KEYWORDS):
                     return []
 
-        fix = FIX_SNIPPETS["WHSEC-001"].format(route=h.route_path, func=h.name)
+        # 핸들러 파라미터에서 실제 서명 헤더 변수명 추출
+        sig_param = "x_hub_signature_256"
+        if isinstance(h.ast_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for arg in h.ast_node.args.args:
+                if any(kw in arg.arg.lower() for kw in {"sig", "signature", "hash"}):
+                    sig_param = arg.arg
+                    break
+
+        fix = FIX_SNIPPETS["WHSEC-001"].format(
+            route=h.route_path, func=h.name, sig_param=sig_param,
+        )
         return [Finding(
             rule_id="WHSEC-001",
             rule_name="서명 검증 누락",
@@ -258,6 +291,11 @@ class SASTEngine:
                 if any(isinstance(o, ast.Name) and
                        any(kw in o.id.lower() for kw in SIG_VAR_KEYWORDS)
                        for o in ops):
+                    # 실제 비교 대상 변수명 추출
+                    left  = cmp.left.id if isinstance(cmp.left, ast.Name) else "signature"
+                    right = (cmp.comparators[0].id
+                             if isinstance(cmp.comparators[0], ast.Name) else "computed")
+                    fix = FIX_SNIPPETS["WHSEC-002"].format(left=left, right=right)
                     loc = f" (위임: {delegated})" if delegated else ""
                     findings.append(Finding(
                         rule_id="WHSEC-002",
@@ -267,7 +305,7 @@ class SASTEngine:
                         filepath=pr.filepath, handler_name=h.name,
                         lineno=getattr(cmp, "lineno", h.lineno),
                         cvss_score=7.4,
-                        fix_snippet=FIX_SNIPPETS["WHSEC-002"],
+                        fix_snippet=fix,
                     ))
         return findings
 
@@ -296,6 +334,16 @@ class SASTEngine:
                             else "SHA1은 충돌 공격이 실증됨")
                     loc = f" (위임: {delegated})" if delegated else ""
                     fix_key = f"WHSEC-003-{algo}"
+                    # hmac.new(secret, payload, algo) 에서 실제 변수명 추출
+                    secret_name  = (child.args[0].id
+                                    if len(child.args) > 0 and isinstance(child.args[0], ast.Name)
+                                    else "secret")
+                    payload_name = (child.args[1].id
+                                    if len(child.args) > 1 and isinstance(child.args[1], ast.Name)
+                                    else "payload")
+                    fix = FIX_SNIPPETS.get(fix_key, "").format(
+                        secret=secret_name, payload=payload_name,
+                    )
                     findings.append(Finding(
                         rule_id="WHSEC-003",
                         rule_name="취약한 해시 알고리즘",
@@ -306,7 +354,7 @@ class SASTEngine:
                         lineno=getattr(child, "lineno", h.lineno),
                         cvss_score=score,
                         recommendation=f"hashlib.{algo} → hashlib.sha256",
-                        fix_snippet=FIX_SNIPPETS.get(fix_key, ""),
+                        fix_snippet=fix,
                     ))
         return findings
 
@@ -329,6 +377,13 @@ class SASTEngine:
         if self._has_ts_check(h, pr):
             return []
 
+        ts_header, ts_var, is_param = self._get_ts_header_name(h.ast_node)
+        if is_param:
+            fix = FIX_SNIPPETS["WHSEC-004-param"].format(ts_var=ts_var)
+        else:
+            fix = FIX_SNIPPETS["WHSEC-004-header"].format(
+                ts_header=ts_header, ts_var=ts_var,
+            )
         return [Finding(
             rule_id="WHSEC-004",
             rule_name="타임스탬프 검증 누락",
@@ -339,8 +394,36 @@ class SASTEngine:
             lineno=h.lineno, end_lineno=h.end_lineno,
             cvss_score=5.9,
             recommendation="time.time()과 비교하여 ±5분 이내인지 검증하세요.",
-            fix_snippet=FIX_SNIPPETS["WHSEC-004"],
+            fix_snippet=fix,
         )]
+
+    def _get_ts_header_name(self, node):
+        """타임스탬프 헤더명과 변수명, 파라미터 여부를 반환한다.
+
+        반환: (ts_header, ts_var, is_param)
+          - is_param=True  : FastAPI Header 파라미터로 받는 케이스
+                             → request.headers.get() 줄 불필요
+          - is_param=False : 본문에서 request.headers.get()으로 직접 읽는 케이스
+                             → request.headers.get() 줄 필요
+        """
+        # 1순위: 문자열 상수에서 명확한 타임스탬프 헤더명 검색
+        for child in ast.walk(node):
+            if isinstance(child, ast.Constant) and isinstance(child.value, str):
+                if child.value.lower() in TIMESTAMP_HEADER_STRINGS:
+                    ts_header = child.value
+                    ts_var = ts_header.lower().replace("-", "_")
+                    return ts_header, ts_var, False
+        # 2순위: FastAPI Header 파라미터에서 탐색 (서명 관련 키워드 제외)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for arg in node.args.args:
+                name = arg.arg.lower()
+                if any(kw in name for kw in SIG_VAR_KEYWORDS):
+                    continue
+                if any(kw in name for kw in TIMESTAMP_KEYWORDS):
+                    ts_var = arg.arg
+                    ts_header = "-".join(p.capitalize() for p in arg.arg.split("_"))
+                    return ts_header, ts_var, True
+        return "X-Timestamp", "x_timestamp", False
 
     def _handler_has_sig(self, h, pr):
         for name, _ in collect_calls(h.ast_node):
