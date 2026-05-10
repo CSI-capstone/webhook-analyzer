@@ -1,10 +1,10 @@
 """
-app.py  (v2)
+app.py
 
-변경 사항:
-  - engine.parse_file()에 project_root=tmp_dir 전달 (중첩 import 추적 지원)
-  - DastConfig에 platform_name 전달 (mock payload 생성)
-  - include_router 감지 시 경고 메시지 응답에 포함
+FastAPI 기반 웹훅 보안 분석 API 서버.
+engine.parse_file()에 project_root를 전달하여 중첩 import 추적을 지원하며,
+DastConfig에 platform_name을 전달해 플랫폼별 mock payload를 생성한다.
+include_router 감지 시 경고 메시지를 응답에 포함한다.
 """
 
 import os
@@ -67,7 +67,7 @@ async def analyze(
     tmp_dir = None
 
     try:
-        # ── 1) 파일 업로드 처리 ──
+        # 1) 파일 업로드 처리 
         file_bytes = await code.read()
         filename = code.filename or "upload.py"
 
@@ -78,7 +78,7 @@ async def analyze(
 
         py_files = find_webhook_files(py_files)
 
-        # ── 2) AST 파싱 + SAST ──
+        # 2) AST 파싱 + SAST
         ast_engine = WebhookASTEngine()
         sast_engine = SASTEngine()
 
@@ -87,9 +87,8 @@ async def analyze(
         has_router_split = False
 
         for fpath in py_files:
-            # ★ v2 핵심: project_root=tmp_dir 전달
-            #    → from app.core.security import verify_sig 같은
-            #      중첩 import도 tmp_dir 기준으로 파일을 찾아감
+            # project_root=tmp_dir 전달
+            # from app.core.security import verify_sig 같은 중첩 import도 tmp_dir 기준으로 파일을 찾아감
             pr = ast_engine.parse_file(fpath, project_root=tmp_dir)
             if pr.errors:
                 continue
@@ -120,7 +119,7 @@ async def analyze(
 
         main_pr = max(handler_prs, key=lambda p: len(p.handlers))
 
-        # ── 3) 플랫폼 감지 ──
+        # 3) 플랫폼 감지
         sig_header = "X-Hub-Signature-256"
         is_stripe = False
         is_slack = False
@@ -147,7 +146,7 @@ async def analyze(
             if det.platform in PLATFORM_DOC_LINKS:
                 doc_links = PLATFORM_DOC_LINKS[det.platform]
 
-        # ── 4) DAST ──
+        # 4) DAST
         probes = {}
         all_attacks = {}
         all_endpoint_paths = []
@@ -178,9 +177,8 @@ async def analyze(
                 attacks = dast.run_all(path, probe)
                 all_attacks[path] = attacks
 
-        # ── 5) 리포트 생성 ──
-        # 버그 2 수정: function_name만 키로 쓰면 다중 파일 업로드 시 동일 함수명이
-        # 덮어씌워짐 → (filepath, function_name) 튜플을 키로 사용
+        # 5) 리포트 생성
+        # 다중 파일 업로드 시 동일 함수명 충돌을 방지하기 위해 (filepath, function_name) 튜플을 키로 사용
         # SAST Finding의 handler_name 매핑은 filepath도 함께 고려
         handler_to_path = {}
         for pr in all_parse_results:
@@ -206,9 +204,8 @@ async def analyze(
             if path and path in ep_sast:
                 ep_sast[path].append(f)
 
-        # 버그 1 수정: 모듈 레벨 Finding(WHSEC-006, WHSEC-DYN)은 handler_name이
-        # "(모듈 레벨)" 또는 "(파일 전체)"이므로 핸들러 이름 매핑에서 누락됨
-        # → 별도로 수집하여 해당 파일의 첫 번째 핸들러 경로에 포함
+        # 모듈 레벨 Finding(WHSEC-DYN)은 handler_name이 "(모듈 레벨)" 또는 "(파일 전체)"이므로
+        # 핸들러 이름 매핑에서 누락됨 → 별도로 수집하여 해당 파일의 첫 번째 핸들러 경로에 포함
         MODULE_LEVEL_NAMES = {"(모듈 레벨)", "(파일 전체)"}
 
         # DAST 실행 여부와 무관하게 모듈 레벨 Finding을 ep_sast에 fallback 추가
@@ -240,9 +237,9 @@ async def analyze(
                     h_findings = [
                         f for f in all_sast_findings
                         if f.handler_name == h.name
-                        and f.filepath == pr.filepath  # 버그 2 수정: 파일 경로도 확인
+                        and f.filepath == pr.filepath  # 파일 경로도 함께 확인하여 동일 함수명 충돌 방지
                     ]
-                    # 버그 1 수정: 파일의 첫 번째 핸들러에 모듈 레벨 Finding 포함
+                    # 첫 번째 핸들러에 모듈 레벨 Finding 포함
                     if not module_assigned:
                         h_findings = h_findings + module_findings
                         module_assigned = True
@@ -266,14 +263,14 @@ async def analyze(
 
         full = compute_full_report(target_file=filename, endpoint_reports=ep_reports)
 
-        # ── 6) 응답 ──
+        # 6) 응답
         result = full_report_to_dict(full)
         result["elapsed_sec"]       = round(time.time() - t_start, 2)
         result["platform"]          = platform_info
-        result["platform_doc"]      = doc_links   # ★ v2: 공식 문서 링크
+        result["platform_doc"]      = doc_links   # 공식 문서 링크
         result["dast_ran"]          = run_dast
         result["files_analyzed"]    = [os.path.basename(p) for p in py_files]
-        result["has_router_split"]  = has_router_split  # ★ v2: include_router 경고
+        result["has_router_split"]  = has_router_split  # include_router 경고
 
         # DAST 연결 오류가 있으면 warnings에 포함
         dast_warnings = []
