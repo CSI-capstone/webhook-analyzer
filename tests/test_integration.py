@@ -18,7 +18,7 @@ D14 — 전체 파이프라인 End-to-End 통합 테스트
   - 포트 9200에서 테스트 서버 자동 기동
 
 실행 방법:
-  cd webhook-sast-v2
+  cd webhook-analyzer
   python tests/test_integration.py
 """
 import sys
