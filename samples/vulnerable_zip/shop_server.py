@@ -22,7 +22,6 @@ shop_server.py — 단국 굿즈샵 (취약한 버전)
     WHSEC-001  CRITICAL  서명 검증 로직 완전 누락
 
 [실행 방법]
-  pip install fastapi uvicorn
   uvicorn samples.shop_server:app --port 8000
 """
 
