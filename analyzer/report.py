@@ -1,7 +1,7 @@
 """
 analyzer/report.py
 
-D12-D13 — 등급 결정 엔진 + 리포트 출력
+등급 결정 엔진 + 리포트 출력
 
 SAST + DAST 결과를 통합하여:
   1) CVSS v3.1 기반 등급 결정 (CRITICAL / HIGH / MEDIUM / LOW)
