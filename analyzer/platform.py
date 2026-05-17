@@ -126,14 +126,14 @@ _DEFAULT_FORMATS = {
         prefix="",
         algo="sha256",
         is_stripe=True,
-        predicted_tier_hint="Tier 1 가능 — 결제/주문 플랫폼, 상태 조회 구현 가능성 높음",
+        predicted_tier_hint="Tier 1 가능",
     ),
     Platform.TOSS_PAYMENTS: SignatureFormat(
         platform=Platform.TOSS_PAYMENTS,
         sig_header="TossPayments-Webhook-Signature",
         prefix="",
         algo="sha256",
-        predicted_tier_hint="Tier 1 가능 — 국내 결제 플랫폼, 주문 상태 조회 가능성 높음",
+        predicted_tier_hint="Tier 1 가능",
     ),
     Platform.SLACK: SignatureFormat(
         platform=Platform.SLACK,
@@ -148,7 +148,7 @@ _DEFAULT_FORMATS = {
         sig_header="webhook-signature",
         prefix="",
         algo="sha256",
-        predicted_tier_hint="Tier 1 가능 — 결제 플랫폼, 상태 조회 가능성 높음",
+        predicted_tier_hint="Tier 1 가능",
     ),
     Platform.GENERIC: SignatureFormat(
         platform=Platform.GENERIC,
@@ -222,7 +222,7 @@ class PlatformDetector:
         evidence: List[str] = []
         source = "\n".join(pr.source_lines)
 
-        # 1단계: 핸들러 파라미터 변수명으로 감지 (신뢰도 높음)
+        # 1단계: 핸들러 파라미터 변수명으로 감지 
         param_platform = self._detect_from_params(pr.handlers, evidence)
         if param_platform not in (Platform.UNKNOWN, Platform.GENERIC):
             fmt = _DEFAULT_FORMATS[param_platform]
@@ -234,7 +234,7 @@ class PlatformDetector:
                 evidence=evidence,
             )
 
-        # 2단계: 소스 내 문자열 패턴으로 감지 (신뢰도 중간)
+        # 2단계: 소스 내 문자열 패턴으로 감지 
         str_platform = self._detect_from_strings(source, evidence)
         if str_platform not in (Platform.UNKNOWN, Platform.GENERIC):
             fmt = _DEFAULT_FORMATS[str_platform]
