@@ -1,7 +1,7 @@
 """
 tests/test_integration.py
 
-D14 — 전체 파이프라인 End-to-End 통합 테스트
+전체 파이프라인 End-to-End 통합 테스트
 
 실행 순서:
   1) SAST: vulnerable_webhook.py 분석 → 7건 Finding 확인
