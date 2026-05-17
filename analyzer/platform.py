@@ -178,7 +178,7 @@ PLATFORM_DOC_LINKS = {
     },
     Platform.TOSS_PAYMENTS: {
         "title": "토스페이먼츠 웹훅 — 연동 보안 가이드",
-        "url": "https://docs.tosspayments.com/guides/webhook/authorization",
+        "url": "https://docs.tosspayments.com/guides/v2/webhook",
     },
     Platform.SLACK: {
         "title": "Slack — 요청 서명 검증 가이드",
