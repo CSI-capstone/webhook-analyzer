@@ -993,7 +993,12 @@
               />
             </div>
             <div class="form-group">
-              <label>상태 조회 경로 템플릿</label>
+              <label
+                >상태 조회 경로 템플릿
+                <span style="color: var(--muted); font-size: 10px"
+                  >(Tier 1, 선택)</span
+                >
+              </label>
               <input
                 type="text"
                 name="state_query"
@@ -1061,7 +1066,7 @@
       const WHSEC004_PLATFORM_DOCS = {
         토스페이먼츠: {
           title: "토스페이먼츠 — 웹훅 보안 가이드",
-          url: "https://docs.tosspayments.com/guides/webhook/authorization",
+          url: "https://docs.tosspayments.com/guides/v2/webhook",
         },
         Stripe: {
           title: "Stripe — 재전송 공격 방어 (타임스탬프 허용 오차)",
@@ -1251,7 +1256,6 @@
       <span class="badge ${cls}">${escHtml(p.platform)}</span>
       <span class="badge ${cls}">${escHtml(p.sig_header)}</span>
       <span class="badge badge-generic">알고리즘: ${escHtml(p.algo || "sha256")}</span>
-      <span class="badge badge-generic">${escHtml(p.tier_hint || "")}</span>
     </div>`;
         }
         if (data.platform_doc?.url) {
