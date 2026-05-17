@@ -44,8 +44,8 @@ SEV_ORDER = {Severity.CRITICAL: 4, Severity.HIGH: 3,
              Severity.MEDIUM: 2, Severity.LOW: 1, Severity.INFO: 0}
 
 TIER_CONFIDENCE_LABEL = {
-    Tier.TIER_1: "높음 — 상태 교차 검증 가능",
-    Tier.TIER_2: "낮음 — HTTP 상태 코드만 관측 가능, 정적 분석(SAST) 결과 우선 참고",
+    Tier.TIER_1: "Tier 1 — 상태 교차 검증 가능 (공격 전후 DB 상태 비교)",
+    Tier.TIER_2: "Tier 2 — HTTP 응답 코드 기반 관측, SAST 결과 교차 확인 권장",
 }
 
 
@@ -75,7 +75,7 @@ def compute_endpoint_report(
     dast_vulns = {ar.attack_type for ar in dast_results if ar.vulnerable}
 
     if sast_vulns and dast_vulns:
-        er.combined_note = "SAST+DAST 모두 탐지 → 신뢰도 매우 높음"
+        er.combined_note = "SAST+DAST 모두 탐지 → 정적·동적 분석 교차 확인됨"
         max_cvss = min(max_cvss + 0.5, 10.0)
     elif sast_vulns and not dast_vulns:
         er.combined_note = "SAST만 탐지 — 동적 환경에서 추가 확인 권장"
