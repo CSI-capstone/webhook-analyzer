@@ -4,6 +4,20 @@
 
 ---
 
+## 실행 환경
+
+- **OS**: Ubuntu 22.04 (VMware Workstation Pro 기반 가상환경에서 개발 및 테스트)
+- **Python**: 3.10
+- **실행 방식**: 가상환경(venv) 기반
+
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+---
+
 ## 프로젝트 구조
 
 ```
@@ -38,9 +52,11 @@ webhook-analyzer/
 │   ├── utils_vulnerable.py        # 외부 위임 취약 함수 (WHSEC-005 테스트용)
 │   └── vulnerable_zip/            # zip 업로드 테스트용 패키지 구조 샘플
 │
-└── tests/
-    ├── test_integration.py        # 전체 파이프라인 E2E 통합 테스트
-    └── __init__.py
+├── tests/
+│   ├── test_integration.py        # 전체 파이프라인 E2E 통합 테스트
+│   └── __init__.py
+│
+└── requirements.txt
 ```
 
 ---
