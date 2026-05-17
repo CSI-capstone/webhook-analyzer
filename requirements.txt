@@ -1,0 +1,7 @@
+fastapi==0.135.1          # 웹 프레임워크 (REST API + 파일 업로드 엔드포인트)
+uvicorn==0.42.0           # ASGI 서버 (FastAPI 실행)
+requests==2.32.5          # DAST HTTP 공격 요청 전송
+pydantic==2.12.5          # FastAPI 요청/응답 데이터 검증
+python-multipart==0.0.22  # 파일 업로드(multipart/form-data) 파싱
+starlette==0.52.1         # FastAPI 내부 의존성
+anyio==4.12.1             # 비동기 I/O (FastAPI 내부 의존성)
