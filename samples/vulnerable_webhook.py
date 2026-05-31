@@ -74,17 +74,17 @@ async def webhook_timing_attack(
 @app.post("/webhook/weak-hash-sha1")
 async def webhook_weak_hash_sha1(
     request: Request,
-    x_hub_signature: str = Header(None),
+    x_hub_signature_256: str = Header(None),
 ):
     payload = await request.body()
 
-    if x_hub_signature is None:
+    if x_hub_signature_256 is None:
         raise HTTPException(status_code=401, detail="Missing signature")
 
     # SHA1 은 충돌 공격에 취약 (GitHub 구 버전 방식)
     computed = "sha1=" + hmac.new(SECRET, payload, hashlib.sha1).hexdigest()
 
-    if not hmac.compare_digest(x_hub_signature, computed):
+    if not hmac.compare_digest(x_hub_signature_256, computed):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     data = await request.json()
@@ -97,17 +97,17 @@ async def webhook_weak_hash_sha1(
 @app.post("/webhook/weak-hash-md5")
 async def webhook_weak_hash_md5(
     request: Request,
-    x_signature: str = Header(None),
+    x_hub_signature_256: str = Header(None),
 ):
     payload = await request.body()
 
-    if x_signature is None:
+    if x_hub_signature_256 is None:
         raise HTTPException(status_code=401, detail="Missing signature")
 
     # MD5 는 암호학적으로 완전히 파기된 알고리즘
     computed = "md5=" + hmac.new(SECRET, payload, hashlib.md5).hexdigest()
 
-    if not hmac.compare_digest(x_signature, computed):
+    if not hmac.compare_digest(x_hub_signature_256, computed):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     data = await request.json()
