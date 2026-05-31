@@ -222,10 +222,18 @@ class PlatformDetector:
         evidence: List[str] = []
         source = "\n".join(pr.source_lines)
 
-        # 1단계: 핸들러 파라미터 변수명으로 감지 
-        param_platform = self._detect_from_params(pr.handlers, evidence)
+        # 1단계: 핸들러 파라미터 변수명으로 감지
+        param_platform, detected_param = self._detect_from_params_with_name(pr.handlers, evidence)
         if param_platform not in (Platform.UNKNOWN, Platform.GENERIC):
             fmt = _DEFAULT_FORMATS[param_platform]
+            # GitHub 레거시 헤더(x_hub_signature)가 감지된 경우
+            # 실제 서버가 X-Hub-Signature(256 없음)를 사용하므로 sig_header를 정확히 맞춘다.
+            # X-Hub-Signature-256(기본값)으로 고정하면 MD5 등 다운그레이드 공격이
+            # 서버에 닿지 못하고 "Missing signature"(401)로 거부된다.
+            if param_platform == Platform.GITHUB and detected_param == "x_hub_signature":
+                import dataclasses
+                fmt = dataclasses.replace(fmt, sig_header="X-Hub-Signature")
+                evidence.append("파라미터 'x_hub_signature' 감지 → 레거시 헤더 사용 → sig_header=X-Hub-Signature")
             return PlatformDetectionResult(
                 filepath=pr.filepath,
                 platform=param_platform,
@@ -268,6 +276,19 @@ class PlatformDetector:
 
     # 내부 헬퍼
     def _detect_from_params(self, handlers: list, evidence: List[str]) -> Platform:
+        """하위 호환용 래퍼 — 파라미터명 없이 플랫폼만 반환한다."""
+        platform, _ = self._detect_from_params_with_name(handlers, evidence)
+        return platform
+
+    def _detect_from_params_with_name(self, handlers: list,
+                                       evidence: List[str]):
+        """감지된 플랫폼과 실제 파라미터 변수명(소문자)을 함께 반환한다.
+
+        반환: (Platform, detected_param_name)
+          detected_param_name: 감지에 사용된 파라미터 변수명(소문자).
+          예) ("x_hub_signature", Platform.GITHUB) 처럼 반환되어
+          호출자가 레거시 헤더 여부를 판별할 수 있다.
+        """
         for handler in handlers:
             node = handler.ast_node
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -276,23 +297,23 @@ class PlatformDetector:
                 name = arg.arg.lower()
                 if name in _GITHUB_HEADERS:
                     evidence.append(f"파라미터: '{arg.arg}' → GitHub")
-                    return Platform.GITHUB
+                    return Platform.GITHUB, name
                 if name in _STRIPE_HEADERS:
                     evidence.append(f"파라미터: '{arg.arg}' → Stripe")
-                    return Platform.STRIPE
+                    return Platform.STRIPE, name
                 if name in _TOSS_HEADERS:
                     evidence.append(f"파라미터: '{arg.arg}' → 토스페이먼츠")
-                    return Platform.TOSS_PAYMENTS
+                    return Platform.TOSS_PAYMENTS, name
                 if name in _SLACK_HEADERS:
                     evidence.append(f"파라미터: '{arg.arg}' → Slack")
-                    return Platform.SLACK
+                    return Platform.SLACK, name
                 if name in _PORTONE_HEADERS:
                     evidence.append(f"파라미터: '{arg.arg}' → PortOne V2")
-                    return Platform.PORTONE_V2
+                    return Platform.PORTONE_V2, name
                 if name in _GENERIC_HEADERS:
                     evidence.append(f"파라미터: '{arg.arg}' → Generic")
-                    return Platform.GENERIC
-        return Platform.UNKNOWN
+                    return Platform.GENERIC, name
+        return Platform.UNKNOWN, ""
 
     def _detect_from_strings(self, source: str, evidence: List[str]) -> Platform:
         # 감지 우선순위: 토스 → Stripe → Slack → PortOne → GitHub
