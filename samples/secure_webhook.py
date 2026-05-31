@@ -65,6 +65,9 @@ async def webhook_secure(
     x_timestamp: str = Header(None),
 ):
     payload = await request.body()
+    
+    if request.headers.get("content-type") != "application/json":
+        raise HTTPException(status_code=415, detail="Unsupported Media Type")
 
     if x_hub_signature_256 is None:
         raise HTTPException(status_code=401, detail="Missing signature")
@@ -101,6 +104,9 @@ async def webhook_delegated_secure(
     x_timestamp: str = Header(None),
 ):
     payload = await request.body()
+    
+    if request.headers.get("content-type") != "application/json":
+        raise HTTPException(status_code=415, detail="Unsupported Media Type")
 
     if x_hub_signature_256 is None:
         raise HTTPException(status_code=401, detail="Missing signature")
