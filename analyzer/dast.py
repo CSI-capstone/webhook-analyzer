@@ -326,7 +326,7 @@ class DASTEngine:
             if err:
                 stage_details.append(f"{label}→연결실패({err})")
                 continue
-            code = resp.status_code if resp else 0
+            code = resp.status_code if resp is not None else 0
             accepted = 200 <= code < 300
             stage_details.append(f"{label}→{code}")
             if accepted:
@@ -437,7 +437,7 @@ class DASTEngine:
                 details, resp.status_code, state_changed,
             )]
         else:
-            code = resp.status_code if resp else 0
+            code = resp.status_code if resp is not None else 0
             return [AttackResult(
                 AttackType.REPLAY, path, probe.tier,
                 False, Confidence.HIGH,
@@ -495,7 +495,7 @@ class DASTEngine:
         normal_payload = _generate_mock_payload(self.cfg.platform_name, str(order_id_a))
         hdrs_a = make_headers(normal_payload, {"Content-Type": "text/plain"})
         resp_a, err_a = self._post_raw_safe(url, normal_payload, hdrs_a)
-        code_a = resp_a.status_code if resp_a else 0
+        code_a = resp_a.status_code if resp_a is not None else 0
         if 200 <= code_a < 300:
             details_a = [f"text/plain→{code_a}"]
             state_changed_a = False
@@ -521,7 +521,7 @@ class DASTEngine:
         wrapped = json.dumps([base_obj], ensure_ascii=False).encode()
         hdrs_b = make_headers(wrapped)
         resp_b, _ = self._post_safe(url, wrapped, hdrs_b)
-        code_b = resp_b.status_code if resp_b else 0
+        code_b = resp_b.status_code if resp_b is not None else 0
         if 200 <= code_b < 300:
             results.append(AttackResult(
                 AttackType.TYPE_CONFUSION, path, probe.tier,
@@ -615,12 +615,15 @@ class DASTEngine:
                 resp = self.s.post(url, data=payload, headers=h,
                                    timeout=self.cfg.timeout)
                 return resp, None
-            except requests.exceptions.ConnectionError:
-                last_err = f"연결 거부 — 서버가 실행 중인지 확인 ({url})"
-            except requests.exceptions.Timeout:
-                last_err = f"타임아웃 — {self.cfg.timeout}초 초과"
+            except requests.exceptions.ConnectionError as e:
+                last_err = str(e) or f"연결 거부 — 서버가 실행 중인지 확인 ({url})"
+            except requests.exceptions.Timeout as e:
+                last_err = str(e) or f"타임아웃 — {self.cfg.timeout}초 초과"
             except requests.exceptions.RequestException as e:
-                last_err = str(e)
+                last_err = str(e) or f"요청 오류 — {type(e).__name__}"
+            except Exception as e:
+                # requests 범위 밖 예외 (socket.timeout, RemoteDisconnected 등)
+                last_err = f"{type(e).__name__}: {e}" or f"알 수 없는 오류 — {type(e).__name__}"
         return None, last_err
 
     def _post_raw_safe(self, url: str, payload: bytes, headers: dict):
@@ -632,12 +635,14 @@ class DASTEngine:
                 resp = self.s.post(url, data=payload, headers=headers,
                                    timeout=self.cfg.timeout)
                 return resp, None
-            except requests.exceptions.ConnectionError:
-                last_err = "연결 거부"
-            except requests.exceptions.Timeout:
-                last_err = "타임아웃"
+            except requests.exceptions.ConnectionError as e:
+                last_err = str(e) or "연결 거부"
+            except requests.exceptions.Timeout as e:
+                last_err = str(e) or "타임아웃"
             except requests.exceptions.RequestException as e:
-                last_err = str(e)
+                last_err = str(e) or f"요청 오류 — {type(e).__name__}"
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}" or f"알 수 없는 오류 — {type(e).__name__}"
         return None, last_err
 
     # 상태 조회
