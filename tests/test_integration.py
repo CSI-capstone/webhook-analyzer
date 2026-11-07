@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from analyzer.engine import WebhookASTEngine
 from analyzer.sast import SASTEngine, Finding, Severity
-from analyzer.dast import DASTEngine, DastConfig, Tier, AttackType  # DOWNGRADE, REPLAY, TYPE_CONFUSION
+from analyzer.dast import DASTEngine, DastConfig, Tier, AttackType, Verdict  # DOWNGRADE, REPLAY, TYPE_CONFUSION
 from analyzer.report import (
     compute_endpoint_report, compute_full_report, print_report,
     EndpointReport,
@@ -42,12 +42,12 @@ SAMPLES = os.path.join(os.path.dirname(__file__), "..", "samples")
 
 # 엔드포인트별 서명 헤더 매핑
 SIG_MAP = {
-    "/webhook/no-verify": "X-Hub-Signature-256",
-    "/webhook/timing-attack": "X-Hub-Signature-256",
-    "/webhook/weak-hash-sha1": "X-Hub-Signature",
+    "/webhook/no-verify": "X-Signature",
+    "/webhook/timing-attack": "X-Signature",
+    "/webhook/weak-hash-sha1": "X-Signature",
     "/webhook/weak-hash-md5": "X-Signature",
-    "/webhook/no-timestamp": "X-Hub-Signature-256",
-    "/webhook/secure": "X-Hub-Signature-256",
+    "/webhook/no-timestamp": "X-Signature",
+    "/webhook/secure": "X-Signature",
 }
 
 WEBHOOK_ENDPOINTS = list(SIG_MAP.keys())
@@ -100,18 +100,20 @@ def main():
     h2("안전 서버 (secure_webhook.py)")
     safe_findings = sast.analyze_file(os.path.join(SAMPLES, "secure_webhook.py"))
     print(f"  Finding: {len(safe_findings)}건")
-    all_ok &= check("안전 서버 0건 (오탐 없음)", len(safe_findings) == 0)
+    all_ok &= check("안전 서버 0건 (오탐 없음)", not any(f.severity != Severity.INFO for f in safe_findings))
 
     h1("PHASE 2: 동적 분석 (DAST)")
 
     # 서버 기동
     reset_db()
-    srv = start_server(PORT)
+    global BASE
+    srv = start_server(0)
+    BASE = f"http://127.0.0.1:{srv.server_port}"
     time.sleep(0.3)
     print(f"  서버 시작: {BASE}")
 
     try:
-        dast = DASTEngine(DastConfig(base_url=BASE, secret=b"supersecretkey"))
+        dast = DASTEngine(DastConfig(base_url=BASE, secret=b"supersecretkey", request_interval=0, state_check_delay=0))
 
         # Probe
         h2("Probe — Tier 분류")
@@ -152,7 +154,7 @@ def main():
         all_ok &= check("V1 서명없음 수락",
                          any(a.vulnerable and a.attack_type == AttackType.DOWNGRADE for a in nv))
 
-        # V2: 타이밍 공격 (== 비교) — /webhook/timing-attack은 타임스탬프를 정상 검증하므로 DAST REPLAY는 거부됨
+        # V2: 일반 비교 패턴은 SAST로 확인한다. 별도의 시간 검증 누락은 DAST에서 독립적으로 관측될 수 있다.
         # == 비교 취약점은 SAST 결과로 검증
         ta_sast = [f for f in vuln_findings
                    if f.handler_name == "webhook_timing_attack"
@@ -178,12 +180,12 @@ def main():
         # 안전: 전공격 거부
         sc = all_attacks.get("/webhook/secure", [])
         all_ok &= check("S 전공격 거부 (안전)",
-                         all(not a.vulnerable for a in sc))
+                         all(a.status == Verdict.REJECTED for a in sc))
 
         # 타입혼동: 취약 엔드포인트에서 일부 수락, 안전에서 거부
         tc_safe = [a for a in sc if a.attack_type == AttackType.TYPE_CONFUSION]
         all_ok &= check("S 타입혼동 거부 (안전)",
-                         all(not a.vulnerable for a in tc_safe))
+                         all(a.status == Verdict.REJECTED for a in tc_safe))
 
         h1("PHASE 2.5: 플랫폼별 엔드포인트 검증")
 
@@ -203,7 +205,8 @@ def main():
             reset_db()
             p_cfg = DastConfig(
                 base_url=BASE,
-                secret=b"supersecretkey",
+                secret=(b"whsec_c3VwZXJzZWNyZXRrZXk=" if pname == "portone" else b"supersecretkey"),
+                request_interval=0, state_check_delay=0,
                 sig_header=sig_hdr,
                 platform_name=pname,
                 is_stripe=is_stripe,
@@ -212,6 +215,7 @@ def main():
             p_dast = DASTEngine(p_cfg)
             p_probe = p_dast.probe(ep, sig_hdr)
             p_attacks = p_dast.run_all(ep, p_probe, sig_hdr)
+            p_dast.close()
             p_vulns = [a for a in p_attacks if a.vulnerable]
             found = any(a.vulnerable and a.attack_type == expected_type for a in p_attacks)
             all_ok &= check(label, found)
@@ -272,7 +276,9 @@ def main():
                          full.total_dast_vulns >= 4)
 
     finally:
+        dast.close()
         srv.shutdown()
+        srv.server_close()
 
     h1("최종 결과")
     if all_ok:

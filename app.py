@@ -10,6 +10,7 @@ include_router 감지 시 경고 메시지를 응답에 포함한다.
 import os
 import sys
 import time
+import tokenize
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -21,9 +22,9 @@ if _ROOT not in sys.path:
 from analyzer.engine import WebhookASTEngine
 from analyzer.sast import SASTEngine
 from analyzer.dast import DASTEngine, DastConfig, Tier
-from analyzer.report import compute_endpoint_report, compute_full_report
-from analyzer.serializer import full_report_to_dict
-from backend.upload import process_upload, find_webhook_files, cleanup, UploadError
+from analyzer.report import compute_endpoint_report, compute_full_report, group_findings
+from analyzer.serializer import full_report_to_dict, probe_result_to_dict
+from backend.upload import process_upload, find_webhook_files, cleanup, UploadError, MAX_FILE_SIZE
 
 try:
     from analyzer.platform import PlatformDetector, Platform, PLATFORM_DOC_LINKS
@@ -34,10 +35,39 @@ except ImportError:
 
 
 app = FastAPI(
-    title="Webhook Security Analyzer",
+    title="HookLens",
     description="웹훅 핸들러 보안 취약점 자동 탐지 프레임워크",
-    version="2.0.0",
+    version="2.1.0",
 )
+
+
+def _attach_source_context(endpoints, project_root):
+    """Add bounded display excerpts before upload cleanup; detection is unchanged."""
+    root = os.path.realpath(project_root)
+    cache = {}
+    for endpoint in endpoints:
+        for finding in endpoint.get("sast_findings", []):
+            path = os.path.realpath(finding.get("filepath", ""))
+            try:
+                if os.path.commonpath([root, path]) != root:
+                    continue
+                line = int(finding.get("lineno", 0))
+                if line < 1:
+                    continue
+                if path not in cache:
+                    with tokenize.open(path) as source:
+                        cache[path] = source.read().splitlines()
+                lines = cache[path]
+                if line > len(lines):
+                    continue
+                start = max(0, line - 4)
+                finding["display_path"] = os.path.relpath(path, root).replace(os.sep, "/")
+                finding["source_context"] = {
+                    "start_line": start + 1,
+                    "lines": [text[:1000] for text in lines[start:line + 3]],
+                }
+            except (OSError, ValueError, TypeError, SyntaxError, UnicodeError):
+                continue
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -51,7 +81,7 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "2.0.0", "platform_detector": _PLATFORM_AVAILABLE}
+    return {"status": "ok", "version": "2.1.0", "platform_detector": _PLATFORM_AVAILABLE}
 
 
 @app.post("/analyze")
@@ -60,15 +90,20 @@ async def analyze(
     webhook_url: str = Form("", description="웹훅 수신 서버 base URL (DAST용). 비워두면 SAST만 실행"),
     state_create: str = Form("", description="[Tier 1] 상태 생성 경로 (선택)"),
     state_query: str = Form("", description="[Tier 1] 상태 조회 경로 템플릿 (선택)"),
-    secret: str = Form("", description="HMAC 서명 시크릿 키 (선택 — 비우면 재전송 공격 생략)"),
+    secret: str = Form("", description="HMAC 서명 시크릿 키 (선택 — 비우면 정상 서명 시험 생략)"),
     sast_only: bool = Form(False, description="True면 DAST 건너뜀"),
+    strict_json: bool = Form(False, description="대상이 JSON 객체 전용 정책을 가진 경우에만 선택"),
+    timestamp_tolerance: int = Form(300, ge=1, le=86400),
 ):
     t_start = time.time()
     tmp_dir = None
+    dast_sessions = []
+    parse_errors = []
+    endpoint_detections = {}
 
     try:
         # 1) 파일 업로드 처리 
-        file_bytes = await code.read()
+        file_bytes = await code.read(MAX_FILE_SIZE + 1)
         filename = code.filename or "upload.py"
 
         try:
@@ -91,6 +126,7 @@ async def analyze(
             # from app.core.security import verify_sig 같은 중첩 import도 tmp_dir 기준으로 파일을 찾아감
             pr = ast_engine.parse_file(fpath, project_root=tmp_dir)
             if pr.errors:
+                parse_errors.extend(f"{os.path.basename(fpath)}: {error}" for error in pr.errors)
                 continue
             all_parse_results.append(pr)
             all_sast_findings.extend(sast_engine.analyze(pr))
@@ -146,122 +182,60 @@ async def analyze(
             if det.platform in PLATFORM_DOC_LINKS:
                 doc_links = PLATFORM_DOC_LINKS[det.platform]
 
-        # 4) DAST
-        probes = {}
-        all_attacks = {}
-        all_endpoint_paths = []
-        run_dast = bool(webhook_url.strip()) and not sast_only
-
-        if run_dast:
-            cfg = DastConfig(
-                base_url=webhook_url.rstrip("/"),
-                secret=secret.encode() if secret.strip() else b"",
-                timeout=5.0,
-                state_create_path=state_create.strip(),
-                state_query_template=state_query.strip(),
-                sig_header=sig_header,
-                is_stripe=is_stripe,
-                is_slack=is_slack,
-                platform_name=platform_name,
-            )
-            dast = DASTEngine(cfg)
-
+        # 4) 엔드포인트별 플랫폼 설정으로 동일한 Probe → 공격 3종 수행
+        probes, all_attacks = {}, {}
+        all_endpoint_paths = list(dict.fromkeys(h.route_path for pr in handler_prs for h in pr.handlers))
+        route_map = {r.path: r for pr in handler_prs for r in pr.routes if r.is_webhook}
+        from collections import Counter
+        path_counts = Counter(h.route_path for pr in handler_prs for h in pr.handlers)
+        ambiguous_paths = {path for path, count in path_counts.items() if count > 1}
+        if ambiguous_paths:
+            parse_errors.append("중복 핸들러 경로 발견 — 라우터 등록 관계 확인 필요: " + ", ".join(sorted(ambiguous_paths)))
+        if _PLATFORM_AVAILABLE:
             for pr in handler_prs:
-                for route in pr.routes:
-                    if route.is_webhook and route.path not in all_endpoint_paths:
-                        all_endpoint_paths.append(route.path)
-
-            for path in all_endpoint_paths:
-                probe = dast.probe(path, sig_header)
-                probes[path] = probe
-                attacks = dast.run_all(path, probe)
-                all_attacks[path] = attacks
-
-        # 5) 리포트 생성
-        # 다중 파일 업로드 시 동일 함수명 충돌을 방지하기 위해 (filepath, function_name) 튜플을 키로 사용
-        # SAST Finding의 handler_name 매핑은 filepath도 함께 고려
-        handler_to_path = {}
-        for pr in all_parse_results:
-            for route in pr.routes:
-                # 파일 경로를 포함한 고유 키로 저장 (충돌 방지)
-                handler_to_path[(pr.filepath, route.function_name)] = route.path
-                # handler_name만으로도 찾을 수 있도록 미충돌 시 단순 키도 등록
-                if route.function_name not in handler_to_path:
-                    handler_to_path[route.function_name] = route.path
-
-        def _find_path(finding):
-            """Finding의 filepath + handler_name 조합으로 경로 탐색"""
-            # 1순위: (filepath, handler_name) 정확한 매핑
-            p = handler_to_path.get((finding.filepath, finding.handler_name))
-            if p:
-                return p
-            # 2순위: handler_name만으로 탐색 (단일 파일 업로드 등 기존 호환)
-            return handler_to_path.get(finding.handler_name)
-
-        ep_sast: dict = {ep: [] for ep in all_endpoint_paths}
-        for f in all_sast_findings:
-            path = _find_path(f)
-            if path and path in ep_sast:
-                ep_sast[path].append(f)
-
-        # 모듈 레벨 Finding(WHSEC-DYN)은 handler_name이 "(모듈 레벨)" 또는 "(파일 전체)"이므로
-        # 핸들러 이름 매핑에서 누락됨 → 별도로 수집하여 해당 파일의 첫 번째 핸들러 경로에 포함
-        MODULE_LEVEL_NAMES = {"(모듈 레벨)", "(파일 전체)"}
-
-        # DAST 실행 여부와 무관하게 모듈 레벨 Finding을 ep_sast에 fallback 추가
-        # (SAST-only 분기에서도, DAST 분기에서도 ep_sast를 공통으로 참조하므로 여기서 처리)
-        if all_endpoint_paths:
-            unmatched_module = [
-                f for f in all_sast_findings
-                if f.handler_name in MODULE_LEVEL_NAMES
-            ]
-            if unmatched_module:
-                first_ep = all_endpoint_paths[0]
-                ep_sast[first_ep].extend(unmatched_module)
-
-        if not run_dast:
-            ep_reports = []
-            seen = set()
-            for pr in handler_prs:
-                # 이 파일에서 발생한 모듈 레벨 Finding 수집
-                module_findings = [
-                    f for f in all_sast_findings
-                    if f.handler_name in MODULE_LEVEL_NAMES
-                    and f.filepath == pr.filepath
-                ]
-                module_assigned = False  # 파일당 첫 핸들러에만 한 번 포함
+                detections = PlatformDetector().detect_per_handler(pr)
                 for h in pr.handlers:
-                    if h.route_path in seen:
-                        continue
-                    seen.add(h.route_path)
-                    h_findings = [
-                        f for f in all_sast_findings
-                        if f.handler_name == h.name
-                        and f.filepath == pr.filepath  # 파일 경로도 함께 확인하여 동일 함수명 충돌 방지
-                    ]
-                    # 첫 번째 핸들러에 모듈 레벨 Finding 포함
-                    if not module_assigned:
-                        h_findings = h_findings + module_findings
-                        module_assigned = True
-                    ep_reports.append(compute_endpoint_report(
-                        path=h.route_path,
-                        tier=Tier.TIER_2,
-                        sast_findings=h_findings,
-                        dast_results=[],
-                    ))
-        else:
-            ep_reports = []
+                    endpoint_detections[h.route_path] = detections[h.name]
+        run_dast = bool(webhook_url.strip()) and not sast_only
+        if run_dast:
+            from urllib.parse import urlsplit
+            parsed = urlsplit(webhook_url.strip())
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
+                raise HTTPException(422, "웹훅 URL은 인증정보·쿼리·fragment 없는 HTTP(S) base URL이어야 합니다.")
             for path in all_endpoint_paths:
-                probe = probes.get(path)
-                tier = probe.tier if probe else Tier.TIER_2
-                ep_reports.append(compute_endpoint_report(
-                    path=path,
-                    tier=tier,
-                    sast_findings=ep_sast.get(path, []),
-                    dast_results=all_attacks.get(path, []),
-                ))
+                det = endpoint_detections.get(path)
+                fmt = det.sig_format if det else None
+                cfg = DastConfig(base_url=webhook_url.strip().rstrip("/"),
+                    secret=secret.encode() if secret else b"", timeout=5.0,
+                    state_create_path=state_create.strip(), state_query_template=state_query.strip(),
+                    sig_header=fmt.sig_header if fmt else sig_header,
+                    is_stripe=fmt.is_stripe if fmt else False, is_slack=fmt.is_slack if fmt else False,
+                    platform_name=det.platform.value if det else "generic",
+                    strict_json=strict_json, timestamp_tolerance=timestamp_tolerance)
+                dast = DASTEngine(cfg)
+                dast_sessions.append(dast)
+                route = route_map[path]
+                if path in ambiguous_paths or route.method != "POST" or route.path_params:
+                    from analyzer.dast import ProbeResult
+                    probe = ProbeResult(endpoint=path, validation_error="중복 경로, POST 이외 메서드 또는 미치환 경로 파라미터는 자동 시험 불가")
+                else:
+                    probe = dast.probe(path)
+                probes[path] = probe
+                all_attacks[path] = dast.run_all(path, probe)
+
+        # 5) 위치가 다른 외부 위임 Finding도 원래 핸들러에 연결한다.
+        ep_sast = group_findings(all_parse_results, all_sast_findings)
+        ep_reports = [compute_endpoint_report(path,
+                         probes[path].tier if path in probes else Tier.TIER_2,
+                         ep_sast.get(path, []), all_attacks.get(path, []))
+                      for path in all_endpoint_paths]
 
         full = compute_full_report(target_file=filename, endpoint_reports=ep_reports)
+
+        if parse_errors or has_router_split:
+            full.analysis_status = "partial"
+            if full.overall_grade.startswith("A"):
+                full.overall_grade = "N/A — 파싱/라우터 경로 추가 확인 필요"
 
         # 6) 응답
         result = full_report_to_dict(full)
@@ -270,7 +244,16 @@ async def analyze(
         result["platform_doc"]      = doc_links   # 공식 문서 링크
         result["dast_ran"]          = run_dast
         result["files_analyzed"]    = [os.path.basename(p) for p in py_files]
+        result["analysis_warnings"] = parse_errors + (["라우터 prefix/등록 관계는 자동 합성하지 않음; 실제 경로를 확인하세요."] if has_router_split else [])
+        for endpoint in result["endpoints"]:
+            path = endpoint["path"]
+            if path in probes:
+                endpoint["probe"] = probe_result_to_dict(probes[path])
+            if path in endpoint_detections:
+                det = endpoint_detections[path]
+                endpoint["platform"] = {"platform": det.platform.value, "sig_header": det.sig_format.sig_header, "confidence": det.confidence}
         result["has_router_split"]  = has_router_split  # include_router 경고
+        _attach_source_context(result["endpoints"], tmp_dir)
 
         # DAST 연결 오류가 있으면 warnings에 포함
         dast_warnings = []
@@ -283,5 +266,7 @@ async def analyze(
         return JSONResponse(result)
 
     finally:
+        for session in dast_sessions:
+            session.close()
         if tmp_dir:
             cleanup(tmp_dir)

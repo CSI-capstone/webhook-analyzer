@@ -25,7 +25,7 @@ from fastapi import FastAPI, Header, Request, HTTPException
 
 app = FastAPI()
 
-# b"..." 직접 할당은 하드코딩 감지 패턴에 탐지되므로 or 방식으로 작성한다.
+# 시연용 기본 키이며 실제 서비스에서는 WEBHOOK_SECRET 환경변수를 설정한다.
 # 테스트 환경에서 환경변수 미설정 시 기본값으로 동작한다.
 SECRET: bytes = (os.environ.get("WEBHOOK_SECRET") or "supersecretkey").encode()
 
@@ -61,7 +61,7 @@ def _verify_timestamp(timestamp_str: str) -> bool:
 @app.post("/webhook/secure")
 async def webhook_secure(
     request: Request,
-    x_hub_signature_256: str = Header(None),
+    x_signature: str = Header(None),
     x_timestamp: str = Header(None),
 ):
     payload = await request.body()
@@ -69,17 +69,18 @@ async def webhook_secure(
     if request.headers.get("content-type") != "application/json":
         raise HTTPException(status_code=415, detail="Unsupported Media Type")
 
-    if x_hub_signature_256 is None:
+    if x_signature is None:
         raise HTTPException(status_code=401, detail="Missing signature")
     if x_timestamp is None:
         raise HTTPException(status_code=401, detail="Missing timestamp")
 
-    # [S4] 타임스탬프 검증
-    if not _verify_timestamp(x_timestamp):
+    # 서명 검증 뒤에는 서명된 본문 안의 시간값을 검사한다.
+    data_for_time = await request.json()
+    if not isinstance(data_for_time, dict) or not _verify_timestamp(data_for_time.get("timestamp")):
         raise HTTPException(status_code=401, detail="Timestamp expired or invalid")
 
     # [S2+S3] 서명 검증
-    if not _verify_signature(x_hub_signature_256, payload):
+    if not _verify_signature(x_signature, payload):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     # 모든 검증 통과한 경우에만 상태 변경
@@ -100,7 +101,7 @@ def _verify_delegated_secure(signature: str, payload: bytes) -> bool:
 @app.post("/webhook/delegated-secure")
 async def webhook_delegated_secure(
     request: Request,
-    x_hub_signature_256: str = Header(None),
+    x_signature: str = Header(None),
     x_timestamp: str = Header(None),
 ):
     payload = await request.body()
@@ -108,15 +109,16 @@ async def webhook_delegated_secure(
     if request.headers.get("content-type") != "application/json":
         raise HTTPException(status_code=415, detail="Unsupported Media Type")
 
-    if x_hub_signature_256 is None:
+    if x_signature is None:
         raise HTTPException(status_code=401, detail="Missing signature")
     if x_timestamp is None:
         raise HTTPException(status_code=401, detail="Missing timestamp")
 
-    if not _verify_timestamp(x_timestamp):
+    data_for_time = await request.json()
+    if not isinstance(data_for_time, dict) or not _verify_timestamp(data_for_time.get("timestamp")):
         raise HTTPException(status_code=401, detail="Timestamp expired or invalid")
 
-    if not _verify_delegated_secure(x_hub_signature_256, payload):
+    if not _verify_delegated_secure(x_signature, payload):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     data = await request.json()

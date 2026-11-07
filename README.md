@@ -1,432 +1,146 @@
-# WebhookFilter — 웹훅 핸들러 보안 취약점 자동 탐지 프레임워크
+# HookLens
 
-웹훅 수신 서버 개발자가 **배포 전** 자신의 핸들러 코드를 자가 검증할 수 있도록 설계된 SAST + DAST 하이브리드 보안 분석 도구입니다.
+Python 웹훅 수신 핸들러를 배포 전에 점검하는 정적·동적 분석 도구이다.
+기존 **SAST 5개 규칙 + DAST 3개 시나리오**와 AST → 플랫폼 감지 → SAST/DAST → 리포트 흐름을 유지한다.
 
----
+상세 변경 내용과 수정 전후 예시는 [코드 보완 설명](docs/CODE_CHANGES.md)을 참고한다.
+UI 레퍼런스·변경 파일·시연 순서와 최신 검증은 [UI 개편 설명](docs/UI_CHANGES.md)을 참고한다.
 
-## 실행 환경
+## 설치와 실행
 
-- **OS**: Ubuntu 22.04 (VMware Workstation Pro 기반 가상환경에서 개발 및 테스트)
-- **Python**: 3.10
-- **실행 방식**: 가상환경(venv) 기반
+Python 3.10 이상을 사용한다. 업로드된 Python 코드를 import하거나 실행하지 않고 AST로 읽는다.
+DAST는 사용자가 별도로 실행한 자신의 테스트 서버로 요청을 보낸다.
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+uvicorn app:app --port 8001
 ```
 
----
-
-## 프로젝트 구조
-
-```
-webhook-analyzer/
-├── main.py                        # CLI 진입점
-├── app.py                         # Web UI / REST API 서버 (FastAPI)
-│
-├── analyzer/                      # 핵심 분석 패키지
-│   ├── engine.py                  # AST 파서 + 라우트 추출 (코어 엔진)
-│   ├── sast.py                    # 정적 분석 (SAST) — 5개 보안 규칙
-│   ├── dast.py                    # 동적 분석 (DAST) — Probe + 3종 공격
-│   ├── platform.py                # 플랫폼 자동 감지 (GitHub / Stripe 등)
-│   ├── report.py                  # 통합 등급 결정 + 리포트 생성
-│   ├── serializer.py              # 결과 객체 → JSON 변환
-│   └── __init__.py
-│
-├── backend/
-│   ├── upload.py                  # 파일 업로드 처리 + 임시 폴더 관리
-│   └── __init__.py
-│
-├── frontend/
-│   └── index.html                 # 웹 UI (단일 파일 SPA)
-│
-├── server/
-│   ├── test_server.py             # 취약 / 안전 엔드포인트 내장 테스트 서버
-│   └── __init__.py
-│
-├── samples/
-│   ├── shop_server.py             # 시연용 서버 — 단국 굿즈샵 (토스페이먼츠 연동)
-│   ├── vulnerable_webhook.py      # 취약 핸들러 예시 (SAST 규칙 검증용)
-│   ├── secure_webhook.py          # 안전 핸들러 예시 (오탐 검증용)
-│   ├── utils_vulnerable.py        # 외부 위임 취약 함수 (WHSEC-005 테스트용)
-│   └── vulnerable_zip/            # zip 업로드 테스트용 패키지 구조 샘플
-│
-├── tests/
-│   ├── test_integration.py        # 전체 파이프라인 E2E 통합 테스트
-│   └── __init__.py
-│
-└── requirements.txt
-```
-
----
-
-## 시연 가이드 (Web UI)
-
-WebhookFilter의 탐지 능력을 브라우저에서 직접 확인하는 방법입니다.  
-터미널 2개가 필요합니다.
-
-### 1단계 — 시연 대상 서버 실행
+Windows에서는 `.venv\Scripts\activate`로 가상환경을 활성화한다.
+브라우저에서 `http://127.0.0.1:8001`을 연다.
+웹훅 URL을 비우면 정적분석만 수행한다.
 
 ```bash
-# 터미널 1
-uvicorn samples.shop_server:app --port 8000 --reload
+# 일반 HMAC 모의 쇼핑몰: 실제 결제 제공자 연동 예제가 아니다.
+uvicorn samples.shop_server:app --port 8000
+
+# 정적분석만
+python main.py --code samples/vulnerable_webhook.py --sast-only
+
+# 정적·동적 분석
+python main.py --code samples/shop_server.py \
+  --url http://127.0.0.1:8000 --secret dku-toss-secret-2026 \
+  --state-create /orders --state-query '/orders/{id}'
 ```
 
-단국 굿즈샵 결제 서버가 `http://localhost:8000`에서 기동됩니다.
+시연용 키 이름은 기존 실행 예시와의 호환을 위해 유지했다. 실제 토스 결제용 키가 아니다.
 
-### 2단계 — WebhookFilter 서버 실행
+## 점검 규칙
 
-```bash
-# 터미널 2
-uvicorn app:app --port 8001 --reload
-```
-
-### 3단계 — 브라우저에서 분석 실행
-
-브라우저에서 `http://localhost:8001`에 접속한 뒤 아래 값을 입력합니다.
-
-| 항목 | 입력값 |
+| ID | 내용 |
 |---|---|
-| 소스코드 파일 | `samples/shop_server.py` 업로드 |
-| 웹훅 URL | `http://localhost:8000` |
-| 시크릿 키 | `dku-toss-secret-2026` |
-| 상태 생성 경로 | `/orders` |
-| 상태 조회 경로 | `/orders/{id}` |
+| WHSEC-001 | 지원하는 서명 검증·실패 거부 패턴을 찾지 못함 또는 검증 확인 불가 |
+| WHSEC-002 | 서명에 일반 동등·부등 비교 사용 |
+| WHSEC-003 | HMAC-SHA1/MD5 사용 및 SHA256 정책 검토 |
+| WHSEC-004 | 수신 시간값의 유효성 검증 누락 |
+| WHSEC-005 | 외부 파일의 검증 함수 내부 결함 또는 소스 추적 불가 |
 
-분석 버튼을 누르면 SAST + DAST 전체 파이프라인이 실행되고, 엔드포인트별 취약점 등급과 수정 코드 스니펫이 표시됩니다.
+005는 외부 위임 자체를 취약점으로 간주하지 않는다. 외부에서 찾은 비교·해시 결함을 보고한다.
+동적 import 안내 `WHSEC-DYN`은 기존의 보조 INFO 안내이며 여섯 번째 보안 규칙이 아니다.
 
-> **주의:** 시크릿 키는 반드시 `dku-toss-secret-2026`을 입력해야 합니다.  
-> 다른 값을 입력하면 DAST가 유효한 서명을 생성하지 못해 재전송 공격 탐지(WHSEC-004)가 실패합니다.
-> 테스트 환경 구성을 위해 임의의 예시 키를 사용했습니다.
+AST 분석은 한정된 패턴을 인식한다. 변수·함수명만으로 검증 성공을 인정하지 않도록 개선했지만,
+임의의 Python 프로그램 전체에 대한 데이터 흐름·모든 실행 경로를 증명하지는 않는다.
 
----
+## 동적분석과 결과 해석
 
-## 통합 테스트
+Probe는 서명 누락 → 잘못된 서명 → 정상 서명 → 상태 조회 가능 여부의 4단계를 유지한다.
+정상 서명 요청이 2xx로 응답하지 않으면 공격 실패를 안전으로 해석하지 않는다.
 
-전체 파이프라인(SAST → DAST → 등급 결정)이 정상 동작하는지 자동으로 검증합니다.  
-**별도로 서버를 띄울 필요 없습니다.** 테스트 서버가 실행 중에 자동으로 기동되고, 테스트가 끝나면 자동으로 종료됩니다.
+| 상태 | 의미 |
+|---|---|
+| `vulnerable` | 선언한 시험 정책을 위반한 요청과 해당 시험 주문 상태 변경을 함께 관측 |
+| `rejected` | 정상 요청 기준선이 성립한 상태에서 시험 요청이 거부됨. 시험 범위 내 결과 |
+| `observed` | 수락을 관측했으나 처리 효과·정책 위반 근거가 충분하지 않음 |
+| `inconclusive` | 정상 요청 실패, 연결 오류, 5xx, 429, 리다이렉트 등으로 판단 불가 |
+| `skipped` | 시크릿 미입력 또는 해당 프로토콜에 시험을 적용할 수 없음 |
+
+기존 `vulnerable: bool`도 유지하며, 확정된 처리 증거가 있는 결과만 `true`이다.
+등급 A는 **지원하는 점검 범위 내 미탐지**라는 뜻이다. 전체 보안 보증이 아니다.
+미완료·미확정 항목이 있으면 A 대신 N/A를 사용한다(이미 탐지된 위험이 있으면 위험 등급과 partial 상태를 함께 표시).
+
+DAST 3종은 다음과 같다.
+
+1. **다운그레이드/서명 정책**: 일반 HMAC·GitHub 형식에는 SHA1/MD5 및 서명 누락을 시험한다.
+   알고리즘 선택 문법이 없는 Stripe·Slack·토스·PortOne에는 잘못된 서명/서명 누락을 시험한다.
+   GitHub 레거시 SHA1 헤더 수락은 정책 확인이 필요하므로 관측으로 보고한다.
+2. **재전송**: 대상 허용 시간보다 60초 오래된 시간값과 유효 서명을 보낸다.
+   가능한 프로토콜에는 본문·서명을 그대로 둔 시간 헤더 갱신도 시험한다.
+   GitHub의 전달 ID 중복 방지는 이 시간 기반 시험에서 검증하지 않는다.
+3. **타입 혼동/입력 정책**: `text/plain`, JSON 배열 래핑을 시험한다.
+   기본은 수락 관측이다. 대상이 JSON 객체만 허용한다는 계약이 있을 때만 `--strict-json` 또는 UI 체크박스를 선택한다.
+   유효한 서명으로 보내므로 인증 우회 성공을 뜻하지 않는다.
+
+`--timestamp-tolerance 300` 또는 UI 입력으로 대상의 실제 허용 시간을 설정한다.
+CLI 종료 코드는 0(점검 범위 미탐지), 1(위험 징후/처리 증거 탐지), 2(입력 오류·분석 미완료)이다.
+
+## 상태 조회 인터페이스
+
+Tier 1은 시험 생성·조회 API가 있어 결과를 관측할 수 있다는 뜻이다. 취약 확정과 동의어가 아니다.
+
+- 생성: 지정 경로에 `POST {"item":"analyzer_test"}`. 2xx JSON 응답의 `order_id`, `id`, `pk` 중 하나를 사용한다.
+- 조회: 경로 템플릿의 `{id}`를 치환해 GET. JSON의 `status` 또는 `state`를 읽는다.
+- 각 시험에서 새 주문을 만들고 전후 값을 비교한다. 조회 실패는 상태 변경으로 인정하지 않는다.
+- 생성된 시험 주문을 서버가 실제 이벤트의 대상과 연결할 수 있어야 한다. 예제는 보조 `order_id` 필드로 연결한다.
+
+실제 서비스의 스키마·인증·업무 처리가 예제와 다르면 어댑터 조정이 필요하다. 정상 기준 요청 실패로 드러나며 안전 판정을 내리지 않는다.
+시험은 주문 생성 등 상태 변경을 유발하므로 실제 운영 결제 서버가 아닌 자신이 관리하는 테스트 환경에서 실행한다.
+
+## 플랫폼 지원 범위
+
+| 플랫폼 | 생성하는 서명 형식 |
+|---|---|
+| GitHub | `sha256=` + HMAC-SHA256(raw body), 이벤트/전달 ID 헤더 |
+| Stripe | `t=<ts>,v1=<hex>`, `ts.body`를 서명 |
+| Slack | `v0=<hex>`, `v0:ts:body`를 서명, 별도 시간 헤더 |
+| 토스페이먼츠 | 서명이 제공되는 `payout.changed` 모의 이벤트. `body:transmission-time` 서명, `v1:<Base64>` |
+| PortOne V2 | Standard Webhooks: Base64 디코딩 키, `id.ts.body` 서명, `v1,<Base64>` |
+
+PortOne에는 발급된 `whsec_...` 또는 Base64 시크릿을 입력한다.
+토스 일반 결제 `PAYMENT_STATUS_CHANGED`에는 동일한 서명 정책을 강제하지 않는다.
+일반 결제의 결제 조회 API 검증은 본 도구의 현재 자동 점검 범위 밖이다.
+한 번의 실행에는 시크릿 하나를 사용하므로 실제 플랫폼마다 키가 다르면 따로 분석한다.
+공식 서비스와의 실시간 상호운용성 인증을 의미하지 않으며, 모의 이벤트 스키마는 실제 업무에 맞춰 조정해야 한다.
+
+## 출력 점수
+
+`cvss_score`와 `overall_cvss` 키는 기존 JSON 호환을 위해 유지한다.
+표시는 **규칙 참고 위험도**이며, 환경별 CVSS 벡터를 산출한 공식 CVSS 점수는 아니다.
+정적·동적 탐지가 함께 있어도 점수에 0.5를 더하지 않는다.
+HMAC-MD5는 충돌 문제만으로 즉시 서명 위조가 입증되었다고 판단하지 않으며 MEDIUM으로 조정했다.
+DAST 단독 탐지에도 위험 등급을 반영하되 근거 없는 숫자 CVSS를 만들지 않는다.
+
+## 테스트
 
 ```bash
+python -m unittest discover -s tests -v
 python tests/test_integration.py
+# 선택적 프런트엔드 JS 렌더링 함수 검사(Node.js 필요; 제품 실행에는 불필요)
+node tests/check_frontend.cjs
 ```
 
-아래 항목을 순서대로 검증합니다.
-
-1. **SAST 검증** — `vulnerable_webhook.py` 분석 시 규칙별 Finding 건수 확인, `secure_webhook.py` 분석 시 0건(오탐 없음) 확인
-2. **Probe** — 6개 엔드포인트 Tier 분류 확인
-3. **DAST 공격** — 다운그레이드·재전송·타입 혼동 공격 실행 및 취약 판정 검증
-4. **플랫폼별 검증** — Stripe, 토스페이먼츠, Slack, PortOne V2 엔드포인트 공격 검증
-5. **등급 결정** — 전체 등급 F, SAST 7건+, DAST 4건+ 확인
-
-모든 단계 통과 시 `🎉 전체 파이프라인 통과!`가 출력되고 종료 코드 0을 반환합니다.
-
----
-
-## 파일별 역할 상세 설명
-
-### 진입점
-
-#### `main.py`
-**CLI 진입점.** 터미널에서 직접 분석을 실행할 때 사용합니다.
-
-- `argparse`로 `--code`, `--url`, `--secret`, `--state-create`, `--state-query` 등 인자를 처리합니다.
-- 분석 파이프라인 5단계를 순서대로 호출합니다: AST 파싱 → 플랫폼 감지 → SAST → DAST → 리포트 출력.
-- 취약점이 발견되면 종료 코드 1, 없으면 0을 반환하여 CI/CD 연동에 활용 가능합니다.
-
-```bash
-# 사용 예시 (SAST + DAST 통합 분석)
-python main.py \
-    --code samples/shop_server.py \
-    --url  http://localhost:8000 \
-    --secret dku-toss-secret-2026 \
-    --state-create /orders \
-    --state-query  /orders/{id}
-```
-
----
-
-#### `app.py`
-**Web UI / REST API 서버.** FastAPI 기반으로, 브라우저에서 파일을 업로드하면 분석 결과를 JSON으로 반환합니다.
-
-- `GET /` : `frontend/index.html`을 제공합니다.
-- `GET /health` : 서버 상태 확인 엔드포인트입니다.
-- `POST /analyze` : `.py` 또는 `.zip` 파일을 받아 SAST + DAST 전체 파이프라인을 실행하고 결과를 JSON으로 응답합니다.
-- `main.py`와 분석 로직은 동일하지만, 다중 파일(zip) 업로드와 플랫폼별 공식 문서 링크 반환을 추가로 처리합니다.
-
-```bash
-# 실행 방법
-uvicorn app:app --reload --port 8001
-```
-
----
-
-### `analyzer/` — 핵심 분석 패키지
-
-#### `analyzer/engine.py`
-**AST 파서 + 라우트 추출 (코어 엔진).** 다른 모든 분석 모듈이 이 파일의 결과를 기반으로 동작합니다.
-
-- Python 소스코드를 `ast.parse()`로 파싱하여 **웹훅 핸들러**, **import 목록**, **라우트 정보**를 추출합니다.
-- 웹훅 핸들러 판별 기준: 라우트 경로에 `webhook/hook/callback/notify/event` 키워드가 포함되거나, 함수 파라미터에 서명 헤더 변수명(`x_hub_signature_256`, `stripe_signature`, `tosspayments_webhook_signature` 등)이 있는 경우.
-- `resolve_import()`: import된 외부 파일을 실제 `.py` 파일로 추적하여 `ParseResult`를 반환합니다 (SAST 규칙 5에서 사용).
-- `_detect_router_split()`: `app.include_router()` 패턴을 감지하여 핸들러가 여러 파일에 분산된 경우 경고를 표시합니다.
-
-**핵심 데이터 클래스:**
-
-| 클래스 | 설명 |
-|---|---|
-| `ParseResult` | 파싱 결과 전체 (핸들러, 라우트, import, AST 트리 등) |
-| `WebhookHandler` | 감지된 웹훅 핸들러 1개의 정보 |
-| `RouteEndpoint` | 라우트 1개의 HTTP 메서드, 경로, 파라미터 정보 |
-
----
-
-#### `analyzer/sast.py`
-**정적 분석(SAST) 엔진.** `engine.py`의 `ParseResult`를 받아 5개의 보안 규칙을 적용하고 취약점(`Finding`)을 반환합니다.
-
-| 규칙 ID | 취약점 | 심각도 | 설명 |
-|---|---|---|---|
-| WHSEC-001 | 서명 검증 누락 | CRITICAL (9.8) | HMAC 검증 로직 자체가 없는 경우 |
-| WHSEC-002 | 타이밍 공격 (`==` 비교) | HIGH (7.4) | `==` 대신 `hmac.compare_digest`를 써야 함 |
-| WHSEC-003 | 취약한 해시 알고리즘 | MEDIUM/CRITICAL | SHA1 (6.5) 또는 MD5 (9.1) 사용 탐지 |
-| WHSEC-004 | 타임스탬프 검증 누락 | MEDIUM (5.9) | 재전송 공격 방어를 위한 타임스탬프 검증 부재 |
-| WHSEC-005 | 외부 파일 위임 결함 | MEDIUM/CRITICAL | import한 외부 함수 내부의 취약점 추적 탐지 |
-
-- 각 규칙은 `Finding` 객체와 함께 **자동 수정 코드 스니펫(`fix_snippet`)** 을 생성합니다.
-- 5개 규칙은 플랫폼 구분 없이 동일하게 적용됩니다 (GitHub, Stripe, 토스페이먼츠 등 공통).
-
----
-
-#### `analyzer/dast.py`
-**동적 분석(DAST) 엔진.** 실제로 HTTP 요청을 보내어 런타임에서 취약점을 확인합니다.
-
-**Probe (4단계 Tier 분류):**
-
-| 단계 | 내용 |
-|---|---|
-| Step 1 | 서명 없이 전송 → 수락 여부 확인 |
-| Step 2 | 잘못된 서명으로 전송 → 거부 여부 확인 |
-| Step 3 | 유효한 서명으로 전송 → 정상 동작 확인 |
-| Step 4 | 상태 조회 엔드포인트 존재 여부 → **Tier 1** / **Tier 2** 자동 분류 |
-
-- **Tier 1** (상태조회 경로 입력 시): 공격 전후 DB 상태를 비교하여 높은 신뢰도로 판정
-- **Tier 2** (미입력 시): HTTP 2xx 응답 여부만으로 판정
-
-**3종 공격:**
-
-| 공격 | 설명 |
-|---|---|
-| 다운그레이드 | SHA256 → SHA1 → MD5 → 서명 없음 순으로 알고리즘 다운그레이드 시도 |
-| 재전송 | 만료된 타임스탬프(6분 전) + 유효한 서명으로 전송 |
-| 타입 혼동 | Content-Type을 `text/plain`으로 변조 (Stage A), JSON을 배열로 래핑 (Stage B) |
-
-**지원 플랫폼별 서명 형식:**
-
-| 플랫폼 | 서명 형식 |
-|---|---|
-| GitHub | `X-Hub-Signature-256: sha256=<hex>` |
-| Stripe | `Stripe-Signature: t=<ts>,v1=<hex>` |
-| 토스페이먼츠 | `TossPayments-Webhook-Signature: <Base64(HMAC-SHA256)>` |
-| Slack | `X-Slack-Signature: v0=<hex>` + `X-Slack-Request-Timestamp` 별도 헤더 |
-| PortOne V2 | `webhook-signature: sha256=<hex>` |
-
----
-
-#### `analyzer/platform.py`
-**플랫폼 자동 감지 모듈.** 소스코드를 분석하여 어떤 웹훅 플랫폼인지 자동으로 판별하고, DAST에 사용할 서명 헤더 형식을 결정합니다.
-
-**감지 방식 (우선순위 순):**
-
-1. **파라미터 변수명**: 함수 인자에 `stripe_signature`, `x_hub_signature_256` 등이 있으면 확정 (신뢰도 HIGH)
-2. **문자열 패턴**: 소스 전체에서 정규식 패턴 검색 (신뢰도 MEDIUM)
-3. **Generic**: 일반적인 서명 헤더 추출 (신뢰도 LOW)
-
-**지원 플랫폼:** `GitHub`, `Stripe`, `토스페이먼츠`, `Slack`, `PortOne V2`, `Generic`, `Unknown`
-
-- `PLATFORM_DOC_LINKS`: 각 플랫폼의 공식 보안 가이드 링크를 포함합니다.
-- `RULE_DOC_LINKS`: SAST 규칙별 참고 문서(OWASP, Python 공식 문서, NIST 등) 링크를 포함합니다.
-
----
-
-#### `analyzer/report.py`
-**통합 등급 결정 + 리포트 생성.** SAST와 DAST 결과를 합쳐 최종 보안 등급을 산출합니다.
-
-- CVSS v3.1 점수를 기준으로 SAST Finding의 심각도를 합산합니다.
-- SAST + DAST 모두 탐지 시 신뢰도 보정 (+0.5점, 최대 10.0).
-- DAST만 탐지 시 CVSS 근거 없음 경고 표시.
-
-**전체 등급 기준:**
-
-| 등급 | 조건 |
-|---|---|
-| F | CRITICAL 취약점 존재 |
-| D | HIGH 취약점 존재 |
-| C | MEDIUM 취약점 존재 |
-| B | LOW 취약점 존재 |
-| A | 취약점 없음 |
-
-**핵심 데이터 클래스:**
-
-| 클래스 | 설명 |
-|---|---|
-| `EndpointReport` | 엔드포인트 1개의 SAST + DAST 통합 결과 |
-| `FullReport` | 전체 파일에 대한 최종 리포트 |
-
----
-
-#### `analyzer/serializer.py`
-**결과 객체 → JSON 직렬화.** `app.py`의 API 응답에서 사용합니다.
-
-- `finding_to_dict()`: SAST `Finding` → dict
-- `attack_result_to_dict()`: DAST `AttackResult` → dict
-- `probe_result_to_dict()`: `ProbeResult` → dict
-- `full_report_to_dict()`: `FullReport` → dict (최종 API 응답 형식)
-
-Python `dataclass` 객체를 FastAPI의 `JSONResponse`로 반환하기 위한 변환 계층입니다.
-
----
-
-### `backend/`
-
-#### `backend/upload.py`
-**파일 업로드 처리 + 임시 폴더 관리.** `app.py`에서 호출하며, 업로드된 파일을 안전하게 임시 폴더에 저장합니다.
-
-- `.py` 또는 `.zip` 파일만 허용 (최대 10MB).
-- `_extract_zip()`: Zip Slip 방지 (`../` 경로 차단), Zip Bomb 방지 (압축 해제 누적 크기 50MB 제한, 64KB 청크 단위 스트리밍).
-- `find_webhook_files()`: 추출된 `.py` 파일 목록에서 `webhook`, `app`, `main`, `server` 등 키워드가 포함된 파일을 우선 정렬합니다.
-- `cleanup()`: 분석 완료 후 임시 폴더를 삭제합니다.
-
----
-
-### `frontend/`
-
-#### `frontend/index.html`
-**웹 UI (단일 파일 SPA).** HTML + CSS + JavaScript가 하나의 파일에 통합되어 있습니다.
-
-- 파일 업로드 폼(드래그 앤 드롭 지원)과 분석 결과 대시보드를 제공합니다.
-- `POST /analyze` API를 호출하고 반환된 JSON을 파싱하여 엔드포인트별 SAST/DAST 결과를 시각적으로 표시합니다.
-- WHSEC-004 참고 문서는 감지된 플랫폼에 맞는 공식 문서로 자동 전환됩니다 (토스페이먼츠 분석 시 토스페이먼츠 문서, Stripe 분석 시 Stripe 문서 등).
-- 별도 빌드 과정 없이 `app.py` 서버가 그대로 서빙합니다.
-
----
-
-### `server/`
-
-#### `server/test_server.py`
-**테스트 전용 웹훅 서버.** `tests/test_integration.py`에서 자동으로 기동합니다 (기본 포트 9000).
-
-**취약 엔드포인트 (의도적으로 결함 포함):**
-
-| 경로 | 취약점 |
-|---|---|
-| `POST /webhook/no-verify` | 서명 검증 자체 없음 (WHSEC-001) |
-| `POST /webhook/timing-attack` | `==` 비교 (WHSEC-002) |
-| `POST /webhook/weak-hash-sha1` | SHA1 사용 (WHSEC-003) |
-| `POST /webhook/weak-hash-md5` | MD5 사용 (WHSEC-003) |
-| `POST /webhook/no-timestamp` | 타임스탬프 검증 없음 (WHSEC-004) |
-| `POST /webhook/stripe` | Stripe 형식, 타임스탬프 미검증 |
-| `POST /webhook/toss` | 토스페이먼츠 형식, `==` 비교 |
-| `POST /webhook/slack` | Slack 형식, 타임스탬프 미검증 |
-| `POST /webhook/portone` | PortOne V2 형식, 서명 검증 누락 |
-
-**안전 엔드포인트:**
-
-| 경로 | 설명 |
-|---|---|
-| `POST /webhook/secure` | SHA256 + `compare_digest` + 타임스탬프 + 타입 검증 모두 적용 |
-
-**상태 교차 검증용 (Tier 1):**
-
-| 경로 | 설명 |
-|---|---|
-| `POST /orders` | 주문 생성 (응답에 `order_id` 포함) |
-| `GET /orders/{id}` | 주문 상태 조회 |
-
----
-
-### `samples/`
-
-#### `samples/shop_server.py` ← 주 시연 대상
-**단국 굿즈샵 — 토스페이먼츠 결제 연동 서버 (시연용).** WebhookFilter의 탐지 능력을 직접 확인하기 위한 데모 서버입니다.
-
-"개발은 다 됐는데 보안 문제는 없을까?" 라는 상황을 가정하며, 의도적으로 두 가지 취약점이 삽입되어 있습니다.
-
-| 취약점 | 내용 |
-|---|---|
-| WHSEC-002 HIGH | 서명 비교에 `==` 사용 (타이밍 공격 취약) |
-| WHSEC-004 MEDIUM | `toss-timestamp` 헤더를 수신하지만 만료 검증 미실시 |
-
-#### `samples/vulnerable_webhook.py`
-**취약 핸들러 예시 파일.** SAST 규칙 검증용 코드입니다.
-
-- WHSEC-001 ~ WHSEC-005 각각에 대응하는 취약 핸들러가 포함되어 있습니다.
-- `utils_vulnerable.py`에서 결함 있는 함수를 import하여 외부 파일 위임 탐지(WHSEC-005)도 시연합니다.
-
-#### `samples/secure_webhook.py`
-**안전 핸들러 예시 파일.** 오탐(False Positive) 검증용 코드입니다.
-
-- `hmac.compare_digest` + SHA256 + 타임스탬프 검증이 모두 올바르게 구현되어 있습니다.
-- SAST 분석 시 Finding 0건이 나와야 정상입니다.
-
-#### `samples/utils_vulnerable.py`
-**외부 위임 취약 함수.** WHSEC-005 탐지 테스트용 보조 파일입니다.
-
-- `verify_signature()` 함수 내부에서 `==` 비교를 사용합니다.
-- `vulnerable_webhook.py`에서 import하며, SAST가 이 파일까지 추적하여 내부 결함을 탐지합니다.
-
-#### `samples/vulnerable_zip/`
-**zip 업로드 테스트용 샘플 패키지.**  
-
-업로드 엔드포인트는 파일을 하나만 받을 수 있기 때문에, 여러 파일로 구성된 프로젝트는 zip으로 묶어서 올려야 합니다. vulnerable_shop_server.py만 단독으로 올리면 from webhook_utils import audit_signature 라인에서. 파일을 추적할 수 없어 WHSEC-005가 탐지되지 않습니다. 두 파일을 zip으로 묶으면 upload.py가 압축을 풀고 engine.py가 import를 따라가 내부 결함까지 탐지합니다.  
-
-이 디렉터리는 그 시나리오를 바로 테스트할 수 있도록 준비된 샘플입니다.
-
----
-
-### `tests/`
-
-#### `tests/test_integration.py`
-**전체 파이프라인 E2E 통합 테스트.** 위 [통합 테스트](#통합-테스트) 섹션을 참고하세요.
-
----
-
-## 분석 파이프라인 흐름
-
-```
-사용자 입력 (소스코드 파일 + 웹훅 URL)
-              │
-              ▼
-        [1] engine.py
-    AST 파싱 → ParseResult 생성
-              │
-              ▼
-       [2] platform.py
-  플랫폼 감지 → 서명 헤더 / 형식 결정
-              │
-       ┌──────┴──────┐
-       ▼             ▼
-  [3] sast.py   [4] dast.py
-  5개 규칙 적용  Probe + 3종 공격
-  Finding 생성   AttackResult 생성
-       │             │
-       └──────┬──────┘
-              ▼
-        [5] report.py
-    CVSS 등급 산정 + 통합 리포트
-              │
-              ▼
-      [6] serializer.py
-    JSON 직렬화 → API 응답
-```
-
----
-
-## 실행 방법 요약
-
-| 방법 | 명령 |
-|---|---|
-| 시연 서버 실행 | `uvicorn samples.shop_server:app --port 8000 --reload` |
-| Web UI 서버 실행 | `uvicorn app:app --reload --port 8001` |
-| CLI 분석 | `python main.py --code samples/shop_server.py --url http://localhost:8000 --secret dku-toss-secret-2026 --state-create /orders --state-query /orders/{id}` |
-| 통합 테스트 | `python tests/test_integration.py` |
-| 테스트 서버 단독 실행 | `python server/test_server.py` (포트 9000) |
+단위·회귀 테스트는 Python 표준 `unittest`를 사용한다.
+실제 ASGI/multipart 검사(`test_http_api.py`) 6개는 프로젝트 의존성과 `pip install httpx`가 있을 때 실행된다. 없으면 해당 모듈만 생략한다.
+`test_api_pipeline.py`는 FastAPI가 없으면 선언 인터페이스 대역으로 실제 분석 함수를 시험한다.
+이 경우 ASGI/HTTP 라우팅 검증은 아니다. FastAPI 설치 환경에서는 실제 모듈을 사용한다.
+이 보완 작업의 실행 환경과 검증 한계는 `docs/CODE_CHANGES.md`에 기록했다.
+
+## 남은 제한
+
+- FastAPI/Flask의 일부 데코레이터와 헤더 읽기 패턴을 인식한다. Django 전체, 동적 라우트, 모든 SDK·의존성 주입은 지원하지 않는다.
+- 동일 파일 호출 최대 4단계, 외부 파일 추적 1단계. 순환 호출은 중복 방문을 중단한다.
+- `include_router`/Blueprint prefix와 등록 관계를 자동 합성하지 않는다. 중복 경로·미치환 경로 파라미터·POST 외 메서드는 자동 DAST를 확정하지 않는다.
+- 상태 조회는 일반적인 JSON 계약만 지원한다. 비동기 처리 대기 이후에도 변화가 없으면 미확정으로 남는다.
+- 업로드 크기와 ZIP 누적 해제 크기를 제한하지만 대규모 소스의 CPU/메모리를 별도 샌드박스로 격리하지 않는다.
+- 분석 API의 인증·다중 사용자 작업 큐·운영 배포 보안 강화는 이번 보완 범위에 포함하지 않는다.

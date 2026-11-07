@@ -1,10 +1,10 @@
 """
 shop_server.py — 단국 굿즈샵 (취약한 버전)
 
-  WebhookFilter 시연용 — 취약한 서버 (WHSEC 001 ~ 005 전부 포함)
+  HookLens 시연용 — 취약한 서버 (WHSEC 001 ~ 005 전부 포함)
 
 
-[WebhookFilter 입력값]
+[HookLens 입력값]
   소스코드         : vulnerable_zip.zip (이 파일 + webhook_utils.py)
   웹훅 URL         : http://localhost:8000
   HMAC 시크릿 키   : dku-toss-secret-2026
@@ -15,7 +15,7 @@ shop_server.py — 단국 굿즈샵 (취약한 버전)
   /webhook/toss-payment
     WHSEC-002  HIGH      서명 비교에 == 사용 (타이밍 공격)
     WHSEC-003  MEDIUM    SHA1 취약 해시 알고리즘 사용
-    WHSEC-004  MEDIUM    toss-timestamp 수신하나 만료 미검증
+    WHSEC-004  MEDIUM    x-timestamp 수신하나 만료 미검증
     WHSEC-005  MEDIUM    audit_signature()에서 == 비교 (외부 파일)
 
   /webhook/toss-event
@@ -33,7 +33,7 @@ from webhook_utils import audit_signature
 
 app = FastAPI(
     title="단국 굿즈샵 (취약한 버전)",
-    description="WebhookFilter 시연용 — WHSEC 001~005 모두 포함",
+    description="HookLens 시연용 — WHSEC 001~005 모두 포함",
 )
 
 WEBHOOK_SECRET = b"dku-toss-secret-2026"
@@ -130,38 +130,38 @@ async def get_order(order_id: str):
 # [취약 핸들러 1] 결제 완료 웹훅
 # WHSEC-002 (HIGH)   : signature == expected  (== 비교)
 # WHSEC-003 (MEDIUM) : hmac.new(..., hashlib.sha1)  (취약 해시)
-# WHSEC-004 (MEDIUM) : "toss-timestamp" 읽지만 time.time() 없음
+# WHSEC-004 (MEDIUM) : "x-timestamp" 읽지만 time.time() 없음
 # WHSEC-005 (MEDIUM) : audit_signature() 내부에서 == 비교 (외부 파일)
 
 @app.post("/webhook/toss-payment")
 async def toss_payment_webhook(
     request: Request,
-    tosspayments_webhook_signature: str = Header(None),
+    x_signature: str = Header(None),
 ):
-    """토스페이먼츠 결제 완료 웹훅 수신"""
+    """모의 HMAC 결제 완료 웹훅 수신"""
     payload = await request.body()
     
     content_type = request.headers.get("content-type", "")
     if "application/json" not in content_type:
         raise HTTPException(415)
 
-    if tosspayments_webhook_signature is None:
+    if x_signature is None:
         raise HTTPException(status_code=401, detail="서명 헤더가 없습니다.")
 
-    # [WHSEC-004] toss-timestamp 수신, 만료 검증 없음
+    # [WHSEC-004] x-timestamp 수신, 만료 검증 없음
     # 안전한 코드: abs(time.time() - int(timestamp)) <= 300
-    timestamp = request.headers.get("toss-timestamp")
+    timestamp = request.headers.get("x-timestamp")
 
     # [WHSEC-003] SHA1 취약 해시 알고리즘 사용 
     # 안전한 코드: hashlib.sha256
     expected = hmac.new(WEBHOOK_SECRET, payload, hashlib.sha1).hexdigest()
 
     # [WHSEC-002] == 비교 → 타이밍 공격 취약
-    # 안전한 코드: hmac.compare_digest(tosspayments_webhook_signature, expected)
-    if tosspayments_webhook_signature == expected:
+    # 안전한 코드: hmac.compare_digest(x_signature, expected)
+    if x_signature == expected:
 
         # [WHSEC-005] 외부 파일 위임 함수 내 == 비교
-        audit_signature(tosspayments_webhook_signature, payload, WEBHOOK_SECRET)
+        audit_signature(x_signature, payload, WEBHOOK_SECRET)
 
         if not isinstance(payload, bytes):
             raise HTTPException(status_code=400, detail="잘못된 요청입니다.")
@@ -187,7 +187,7 @@ async def toss_payment_webhook(
 @app.post("/webhook/toss-event")
 async def toss_event_webhook(request: Request):
     """
-    토스페이먼츠 이벤트 알림 웹훅 수신
+    모의 HMAC 이벤트 알림 웹훅 수신
 
     [WHSEC-001] : 서명 검증 로직이 없습니다.
     누구든지 이 엔드포인트로 요청을 보내면 처리됩니다.

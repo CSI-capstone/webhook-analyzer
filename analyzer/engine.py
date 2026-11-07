@@ -10,6 +10,7 @@ include_router / register_blueprint 패턴이 감지되면 라우터 분리 구�
 import ast
 import os
 import re
+import tokenize
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Set, Tuple
 
@@ -39,6 +40,7 @@ class ImportInfo:
     name: str
     alias: Optional[str]
     lineno: int
+    level: int = 0
 
 
 @dataclass
@@ -147,8 +149,12 @@ class WebhookASTEngine:
         project_root: zip 업로드 시 임시 폴더 루트 경로.
                       비워두면 __init__.py 유무로 자동 감지.
         """
-        with open(filepath, "r", encoding="utf-8") as f:
-            source = f.read()
+        try:
+            with tokenize.open(filepath) as f:
+                source = f.read()
+        except (OSError, UnicodeError, SyntaxError, LookupError) as exc:
+            return ParseResult(filepath, ast.Module(body=[], type_ignores=[]), [], {}, [], [], [],
+                               project_root=project_root, errors=[f"소스 읽기 실패: {type(exc).__name__}"])
         return self.parse_source(source, filepath, project_root)
 
     def parse_source(self, source: str, filepath: str = "<string>",
@@ -231,9 +237,10 @@ class WebhookASTEngine:
     def _extract_imports(self, tree: ast.Module) -> List[ImportInfo]:
         out = []
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module:
+            if isinstance(node, ast.ImportFrom):
                 for a in node.names:
-                    out.append(ImportInfo(node.module, a.name, a.asname, node.lineno))
+                    out.append(ImportInfo(node.module or "", a.name, a.asname,
+                                          node.lineno, node.level))
             elif isinstance(node, ast.Import):
                 for a in node.names:
                     out.append(ImportInfo(a.name, a.name, a.asname, node.lineno))
@@ -265,8 +272,8 @@ class WebhookASTEngine:
                 # 경로 이름이 /api/v1/payment 처럼 키워드 없어도 탐지 가능
                 sig_match = any(
                     arg.arg.lower() in WEBHOOK_SIG_PARAMS
-                    for arg in node.args.args
-                )
+                    for arg in node.args.args + node.args.kwonlyargs
+                ) or self._reads_signature_header(node)
 
                 if not path_match and not sig_match:
                     continue
@@ -295,12 +302,21 @@ class WebhookASTEngine:
                 # (_find_handlers()와 동일한 기준 적용)
                 is_webhook = any(kw in path.lower() for kw in WEBHOOK_PATH_KEYWORDS) or \
                              any(arg.arg.lower() in WEBHOOK_SIG_PARAMS
-                                 for arg in node.args.args)
+                                 for arg in node.args.args + node.args.kwonlyargs) or \
+                             self._reads_signature_header(node)
                 routes.append(RouteEndpoint(
                     method.upper(), path, node.name, path_params,
                     header_params, is_webhook, node.lineno))
                 break
         return routes
+
+    @staticmethod
+    def _reads_signature_header(node) -> bool:
+        headers = {var_to_header(name).lower() for name in WEBHOOK_SIG_PARAMS}
+        return any(isinstance(n, ast.Call) and "headers" in get_call_name(n)
+                   and n.args and isinstance(n.args[0], ast.Constant)
+                   and str(n.args[0].value).lower() in headers
+                   for n in ast.walk(node))
 
     def _parse_decorator(self, dec: ast.expr) -> Optional[Tuple[str, str]]:
         if not isinstance(dec, ast.Call) or not isinstance(dec.func, ast.Attribute):
@@ -315,10 +331,8 @@ class WebhookASTEngine:
             method = "get"
             for kw in dec.keywords:
                 if kw.arg == "methods" and isinstance(kw.value, ast.List):
-                    for elt in kw.value.elts:
-                        if isinstance(elt, ast.Constant):
-                            method = str(elt.value).lower()
-                            break
+                    methods = [str(elt.value).lower() for elt in kw.value.elts if isinstance(elt, ast.Constant)]
+                    method = "post" if "post" in methods else (methods[0] if methods else "get")
         return (path, method)
 
     def _extract_header_params(self, func_node) -> List[HeaderParam]:
@@ -327,11 +341,9 @@ class WebhookASTEngine:
             return params
         args = func_node.args
         nd, na = len(args.defaults), len(args.args)
-        for i, default in enumerate(args.defaults):
-            idx = na - nd + i
-            if idx < 0 or idx >= na:
-                continue
-            arg = args.args[idx]
+        pairs = list(zip(args.args[na-nd:], args.defaults)) if nd else []
+        pairs.extend(zip(args.kwonlyargs, args.kw_defaults))
+        for arg, default in pairs:
             if isinstance(default, ast.Call):
                 cn = ""
                 if isinstance(default.func, ast.Name):
@@ -341,7 +353,9 @@ class WebhookASTEngine:
                     if default.args and isinstance(default.args[0], ast.Constant):
                         if default.args[0].value is None:
                             req = False
-                    params.append(HeaderParam(arg.arg, var_to_header(arg.arg), req))
+                    alias = next((kw.value.value for kw in default.keywords
+                                  if kw.arg == "alias" and isinstance(kw.value, ast.Constant)), None)
+                    params.append(HeaderParam(arg.arg, alias or var_to_header(arg.arg), req))
         return params
 
     # 동적 import 감지 (importlib / __import__)
@@ -389,24 +403,41 @@ class WebhookASTEngine:
 
         base_dir = os.path.dirname(os.path.abspath(base_filepath))
         module_rel = imp.module.replace(".", os.sep)
+        if not module_rel and imp.level:
+            module_rel = imp.name.replace(".", os.sep)
 
         # project_root: 인자로 받거나 ParseResult에서 가져오거나 자동 감지
         root = project_root or self._find_project_root(base_filepath)
 
         # 탐색할 루트 목록 (중복 제거)
-        search_roots: List[str] = [base_dir]
-        if root and os.path.isdir(root) and root != base_dir:
-            search_roots.append(root)
+        boundary = os.path.realpath(root or base_dir)
+        search_roots: List[str] = []
+        if imp.level:
+            relative_base = base_dir
+            for _ in range(imp.level - 1):
+                relative_base = os.path.dirname(relative_base)
+            search_roots.append(relative_base)
+        else:
+            current = base_dir
+            while os.path.commonpath([current, boundary]) == boundary:
+                search_roots.append(current)
+                if current == boundary:
+                    break
+                current = os.path.dirname(current)
+            if boundary not in search_roots:
+                search_roots.append(boundary)
 
         for search_root in search_roots:
             # 1) module.py
             candidate = os.path.join(search_root, module_rel + ".py")
-            if os.path.isfile(candidate):
+            if (os.path.commonpath([os.path.realpath(candidate), boundary]) == boundary
+                    and os.path.isfile(candidate)):
                 return self.parse_file(candidate, root)
 
             # 2) module/__init__.py  (패키지)
             candidate_pkg = os.path.join(search_root, module_rel, "__init__.py")
-            if os.path.isfile(candidate_pkg):
+            if (os.path.commonpath([os.path.realpath(candidate_pkg), boundary]) == boundary
+                    and os.path.isfile(candidate_pkg)):
                 return self.parse_file(candidate_pkg, root)
 
         return None

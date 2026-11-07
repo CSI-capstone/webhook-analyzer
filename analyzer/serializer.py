@@ -14,6 +14,8 @@ from analyzer.report import EndpointReport, FullReport
 def finding_to_dict(f: Finding) -> dict:
     return {
         "rule_id":       f.rule_id,
+        "origin_filepath": f.origin_filepath,
+        "related_rule_ids": f.related_rule_ids,
         "rule_name":     f.rule_name,
         "severity":      f.severity.value,
         "message":       f.message,
@@ -35,6 +37,9 @@ def attack_result_to_dict(a: AttackResult) -> dict:
         "endpoint":      a.endpoint,
         "tier":          a.tier.value,
         "vulnerable":    a.vulnerable,
+        "status": a.status.value,
+        "variant": a.variant,
+        "related_rule_ids": a.related_rule_ids,
         "confidence":    a.confidence.value,
         "description":   a.description,
         "details":       a.details,
@@ -47,6 +52,9 @@ def attack_result_to_dict(a: AttackResult) -> dict:
 def probe_result_to_dict(p: ProbeResult) -> dict:
     return {
         "endpoint":        p.endpoint,
+        "baseline_valid": p.baseline_valid,
+        "validation_error": p.validation_error,
+        "invalid_signature_rejected": p.invalid_signature_rejected,
         "tier":            p.tier.value,
         "step1_code":      p.step1_code,
         "step1_accepted":  p.step1_accepted,
@@ -63,6 +71,8 @@ def probe_result_to_dict(p: ProbeResult) -> dict:
 def endpoint_report_to_dict(er: EndpointReport) -> dict:
     return {
         "path":             er.path,
+        "analysis_status": er.analysis_status,
+        "score_basis": er.score_basis,
         "tier":             er.tier.value,
         "overall_severity": er.overall_severity.value,
         "overall_cvss":     er.overall_cvss,
@@ -77,6 +87,10 @@ def endpoint_report_to_dict(er: EndpointReport) -> dict:
 def full_report_to_dict(report: FullReport) -> dict:
     return {
         "target_file":         report.target_file,
+        "analysis_status": report.analysis_status,
+        "total_dast_observations": report.total_dast_observations,
+        "total_dast_inconclusive": report.total_dast_inconclusive,
+        "total_dast_skipped": report.total_dast_skipped,
         "overall_grade":       report.overall_grade,
         "total_sast_findings": report.total_sast_findings,
         "total_dast_vulns":    report.total_dast_vulns,
