@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, List
 
-from analyzer.engine import ParseResult, WebhookHandler
+from analyzer.engine import ParseResult, WebhookHandler, get_call_name
 
 
 # 데이터 구조
@@ -166,6 +166,10 @@ _DEFAULT_FORMATS = {
     ),
 }
 
+# Tier는 제공자가 아니라 수신 서버의 관측 인터페이스로 결정된다.
+for _format in _DEFAULT_FORMATS.values():
+    _format.predicted_tier_hint = "Tier 미확정 — 수신 서버의 상태 조회 가능 여부로 결정"
+
 # 플랫폼 공식 문서 링크
 PLATFORM_DOC_LINKS = {
     Platform.GITHUB: {
@@ -178,7 +182,7 @@ PLATFORM_DOC_LINKS = {
     },
     Platform.TOSS_PAYMENTS: {
         "title": "토스페이먼츠 웹훅 — 연동 보안 가이드",
-        "url": "https://docs.tosspayments.com/guides/v2/webhook",
+        "url": "https://docs.tosspayments.com/reference/using-api/webhook-events",
     },
     Platform.SLACK: {
         "title": "Slack — 요청 서명 검증 가이드",
@@ -186,7 +190,7 @@ PLATFORM_DOC_LINKS = {
     },
     Platform.PORTONE_V2: {
         "title": "PortOne V2 — 웹훅 연동 가이드",
-        "url": "https://developers.portone.io/docs/ko/v2-payment/webhook",
+        "url": "https://developers.portone.io/opi/ko/integration/webhook/readme-v2",
     },
 }
 
@@ -209,8 +213,8 @@ RULE_DOC_LINKS = {
         "url": "https://stripe.com/docs/webhooks/signatures#replay-attacks",
     },
     "WHSEC-005": {
-        "title": "CWE-330 — 불충분한 랜덤성 + 우회 가능 검증",
-        "url": "https://cwe.mitre.org/data/definitions/330.html",
+        "title": "CWE-347 — 암호학적 서명 검증 부적절",
+        "url": "https://cwe.mitre.org/data/definitions/347.html",
     },
 }
 
@@ -352,41 +356,39 @@ class PlatformDetector:
         return _DEFAULT_FORMATS[Platform.GENERIC]
 
     def detect_per_handler(self, pr: ParseResult) -> dict:
-        """핸들러별 플랫폼 감지 (한 파일에 여러 플랫폼 혼재 시 사용)"""
+        """각 핸들러만으로 감지한다. 다른 핸들러의 플랫폼 문자열을 섞지 않는다."""
+        from dataclasses import replace
         results = {}
+        header_mapping = [(_GITHUB_HEADERS, Platform.GITHUB), (_STRIPE_HEADERS, Platform.STRIPE),
+                          (_TOSS_HEADERS, Platform.TOSS_PAYMENTS), (_SLACK_HEADERS, Platform.SLACK),
+                          (_PORTONE_HEADERS, Platform.PORTONE_V2), (_GENERIC_HEADERS, Platform.GENERIC)]
         for handler in pr.handlers:
-            sub_evidence: List[str] = []
-            platform = Platform.UNKNOWN
-            node = handler.ast_node
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                for arg in node.args.args:
-                    name = arg.arg.lower()
-                    mapping = [
-                        (_GITHUB_HEADERS,  Platform.GITHUB),
-                        (_STRIPE_HEADERS,  Platform.STRIPE),
-                        (_TOSS_HEADERS,    Platform.TOSS_PAYMENTS),
-                        (_SLACK_HEADERS,   Platform.SLACK),
-                        (_PORTONE_HEADERS, Platform.PORTONE_V2),
-                        (_GENERIC_HEADERS, Platform.GENERIC),
-                    ]
-                    for header_set, plat in mapping:
-                        if name in header_set:
-                            platform = plat
-                            sub_evidence.append(f"파라미터: '{arg.arg}' → {plat.value}")
-                            break
-                    if platform != Platform.UNKNOWN:
+            sub = replace(pr, handlers=[handler], source_lines=handler.source_code.splitlines())
+            detection = self.detect(sub)
+            # request.headers.get('...') 방식도 정확한 헤더명으로 판별한다.
+            for node in ast.walk(handler.ast_node):
+                if not isinstance(node, ast.Call) or "headers" not in get_call_name(node) or not node.args or not isinstance(node.args[0], ast.Constant):
+                    continue
+                if not isinstance(node.args[0].value, str):
+                    continue
+                raw = node.args[0].value
+                normalized = raw.lower().replace('-', '_')
+                for names, platform in header_mapping:
+                    if normalized in names:
+                        detection = PlatformDetectionResult(pr.filepath, platform,
+                            replace(_DEFAULT_FORMATS[platform], sig_header=raw), 'high',
+                            [f'핸들러 헤더 읽기: {raw}'])
                         break
-
-            if platform == Platform.UNKNOWN:
-                platform = Platform.GENERIC
-                sub_evidence.append("파라미터 감지 실패 → Generic")
-
-            fmt = _DEFAULT_FORMATS.get(platform, _DEFAULT_FORMATS[Platform.GENERIC])
-            results[handler.name] = PlatformDetectionResult(
-                filepath=pr.filepath,
-                platform=platform,
-                sig_format=fmt,
-                confidence="high" if platform not in (Platform.GENERIC, Platform.UNKNOWN) else "low",
-                evidence=sub_evidence,
-            )
+                else:
+                    continue
+                break
+            # FastAPI Header(alias=...)가 있으면 실제 HTTP 헤더명을 사용한다.
+            for route in pr.routes:
+                if route.function_name != handler.name:
+                    continue
+                for header in route.header_params:
+                    if any(word in header.name.lower() for word in ('signature', 'sig')):
+                        detection.sig_format = replace(detection.sig_format, sig_header=header.header_name)
+                        break
+            results[handler.name] = detection
         return results

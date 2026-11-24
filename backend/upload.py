@@ -20,7 +20,7 @@ import os
 import shutil
 import tempfile
 import zipfile
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import List, Tuple
 
 
@@ -84,10 +84,15 @@ def _extract_zip(file_bytes: bytes, dest_dir: str) -> List[str]:
     py_files = []
     try:
         with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
+            if len(zf.infolist()) > 2000:
+                raise UploadError("ZIP 항목 수 2000개 초과")
             for member in zf.infolist():
                 # zip slip 방지: 경로에 ../ 포함된 항목 건너뜀
                 member_path = Path(member.filename)
-                if ".." in member_path.parts:
+                if (".." in member_path.parts or member_path.is_absolute()
+                        or PureWindowsPath(member.filename).drive
+                        or "\\" in member.filename
+                        or (member.external_attr >> 16) & 0o170000 == 0o120000):
                     continue
                 # 디렉터리는 건너뜀
                 if member.filename.endswith("/"):
@@ -98,6 +103,8 @@ def _extract_zip(file_bytes: bytes, dest_dir: str) -> List[str]:
 
                 # 대상 경로 생성
                 target = os.path.join(dest_dir, member.filename)
+                if not Path(target).resolve().is_relative_to(Path(dest_dir).resolve()):
+                    continue
                 os.makedirs(os.path.dirname(target), exist_ok=True)
 
                 # src.read() 전체 읽기 → 청크 단위 스트리밍으로 변경

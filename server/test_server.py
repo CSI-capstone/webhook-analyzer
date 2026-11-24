@@ -30,6 +30,7 @@ import time
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
+from datetime import datetime, timezone
 
 SECRET = b"supersecretkey"
 TIMESTAMP_TOLERANCE = 300
@@ -51,10 +52,10 @@ def _sig_stripe(ts: str, payload: bytes) -> str:
     v1 = hmac.new(SECRET, signed, hashlib.sha256).hexdigest()
     return f"t={ts},v1={v1}"
 
-def _sig_toss(payload: bytes) -> str:
-    """토스페이먼츠: Base64(HMAC-SHA256(secret, payload))"""
-    return base64.b64encode(
-        hmac.new(SECRET, payload, hashlib.sha256).digest()
+def _sig_toss(payload: bytes, timestamp: str) -> str:
+    """토스페이먼츠 지급대행: 본문과 전송 시각을 함께 서명한다."""
+    return "v1:" + base64.b64encode(
+        hmac.new(SECRET, payload + b":" + timestamp.encode(), hashlib.sha256).digest()
     ).decode()
 
 def _sig_slack(ts: str, payload: bytes) -> str:
@@ -62,9 +63,7 @@ def _sig_slack(ts: str, payload: bytes) -> str:
     base = f"v0:{ts}:".encode() + payload
     return "v0=" + hmac.new(SECRET, base, hashlib.sha256).hexdigest()
 
-def _sig_portone(payload: bytes) -> str:
-    """PortOne V2: HMAC-SHA256(secret, payload) hex"""
-    return hmac.new(SECRET, payload, hashlib.sha256).hexdigest()
+
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -100,6 +99,8 @@ class Handler(BaseHTTPRequestHandler):
         m = {
             "/webhook/no-verify": self._v1,
             "/webhook/timing-attack": self._v2,
+            "/webhook/delegated": self._v2,
+            "/webhook/delegated-external": self._v2,
             "/webhook/weak-hash-sha1": self._v3a,
             "/webhook/weak-hash-md5": self._v3b,
             "/webhook/no-timestamp": self._v4,
@@ -138,7 +139,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # [V2] == 비교
     def _v2(self, body):
-        sig = self.headers.get("X-Hub-Signature-256")
+        sig = self.headers.get("X-Signature")
         if not sig:
             return self._json(401, {"detail": "Missing signature"})
         if sig == _sig256(body):  # 취약: ==
@@ -150,10 +151,10 @@ class Handler(BaseHTTPRequestHandler):
 
     # [V3a] SHA1
     def _v3a(self, body):
-        sig = self.headers.get("X-Hub-Signature")
+        sig = self.headers.get("X-Signature")
         if not sig:
             return self._json(401, {"detail": "Missing signature"})
-        if hmac.compare_digest(sig, _sig1(body)):
+        if hmac.compare_digest(sig, _sig256(body)) or hmac.compare_digest(sig, _sig1(body)):
             try: data = json.loads(body)
             except: data = {}
             self._update_db(data)
@@ -165,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
         sig = self.headers.get("X-Signature")
         if not sig:
             return self._json(401, {"detail": "Missing signature"})
-        if hmac.compare_digest(sig, _sigmd5(body)):
+        if hmac.compare_digest(sig, _sig256(body)) or hmac.compare_digest(sig, _sigmd5(body)):
             try: data = json.loads(body)
             except: data = {}
             self._update_db(data)
@@ -174,7 +175,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # [V4] 타임스탬프 미검증
     def _v4(self, body):
-        sig = self.headers.get("X-Hub-Signature-256")
+        sig = self.headers.get("X-Signature")
         if not sig:
             return self._json(401, {"detail": "Missing signature"})
         if not hmac.compare_digest(sig, _sig256(body)):
@@ -188,11 +189,15 @@ class Handler(BaseHTTPRequestHandler):
     def _safe(self, body):
         # Content-Type 검증 (타입 혼동 방어)
         ct = self.headers.get("Content-Type", "")
-        if "application/json" not in ct:
+        if ct.split(";", 1)[0].strip().lower() != "application/json":
             return self._json(415, {"detail": "Unsupported Media Type"})
 
-        sig = self.headers.get("X-Hub-Signature-256")
-        ts = self.headers.get("X-Timestamp")
+        sig = self.headers.get("X-Signature")
+        try:
+            parsed = json.loads(body)
+            ts = parsed.get("timestamp") if isinstance(parsed, dict) else None
+        except (ValueError, TypeError):
+            ts = None
         if not sig:
             return self._json(401, {"detail": "Missing signature"})
         if not ts:
@@ -209,8 +214,8 @@ class Handler(BaseHTTPRequestHandler):
         except:
             return self._json(400, {"detail": "Invalid JSON"})
         # 배열 거부
-        if isinstance(data, list):
-            return self._json(400, {"detail": "Expected object, got array"})
+        if not isinstance(data, dict):
+            return self._json(400, {"detail": "Expected object"})
         # 의심스러운 키 거부 (프로토타입 오염 방어)
         SUSPICIOUS_KEYS = {"__proto__", "constructor", "prototype"}
         if SUSPICIOUS_KEYS & set(data.keys()):
@@ -245,13 +250,16 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {"status": "ok"})
 
     # [토스페이먼츠] 취약: == 비교 (타이밍 공격)
-    # Base64 HMAC-SHA256 형식을 검증하되
+    # v1:Base64(HMAC-SHA256(body:transmission-time)) 형식을 검증하되
     # hmac.compare_digest 대신 == 비교 → 타이밍 공격에 취약
     def _toss(self, body):
         sig = self.headers.get("TossPayments-Webhook-Signature", "")
         if not sig:
             return self._json(401, {"detail": "Missing TossPayments-Webhook-Signature"})
-        expected = _sig_toss(body)
+        timestamp = self.headers.get("TossPayments-Webhook-Transmission-Time", "")
+        if not timestamp:
+            return self._json(401, {"detail": "Missing transmission time"})
+        expected = _sig_toss(body, timestamp)
         if sig == expected:  # 취약: == 비교
             try: data = json.loads(body)
             except: data = {}

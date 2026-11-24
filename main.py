@@ -37,7 +37,7 @@ main.py
        - Probe: Tier 1/2 런타임 결정
        - 공격: 다운그레이드, 재전송, 타입 혼동
   [5] 통합 리포트 (analyzer/report.py)
-       - CVSS 등급, Tier 신뢰도, 수정 코드 스니펫
+       - 참고 위험도 등급, Tier 신뢰도, 수정 코드 스니펫
 """
 
 import argparse
@@ -57,7 +57,7 @@ from analyzer.report import (
     compute_endpoint_report,
     compute_full_report,
     print_report,
-    EndpointReport,
+    EndpointReport, group_findings,
 )
 
 # platform.py는 analyzer 패키지 내에 있다고 가정
@@ -93,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--secret", metavar="SECRET", default=None,
-        help="HMAC 서명에 사용할 시크릿 키 (선택 — 미입력 시 재전송 공격 생략)",
+        help="HMAC 서명에 사용할 시크릿 키 (선택 — 미입력 시 정상 서명 시험 생략)",
     )
     p.add_argument(
         "--timeout", type=float, default=5.0,
@@ -112,6 +112,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="DAST 대상 엔드포인트를 직접 지정 (여러 번 사용 가능). "
              "미지정 시 코드에서 자동 추출",
     )
+    p.add_argument("--strict-json", action="store_true", help="대상이 JSON 객체 전용 정책임을 명시")
+    p.add_argument("--timestamp-tolerance", type=int, default=300, help="대상 서버의 허용 시간(초)")
     return p
 
 
@@ -149,6 +151,16 @@ def run(args: argparse.Namespace) -> int:
     _banner()
     t_start = time.time()
 
+    # 입력 검증
+    if args.timeout <= 0 or args.timestamp_tolerance <= 0:
+        _err("타임아웃과 허용 시간은 양수여야 합니다.")
+        return 2
+    if args.url:
+        from urllib.parse import urlsplit
+        parsed = urlsplit(args.url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            _err("인증정보·쿼리·fragment 없는 HTTP(S) base URL을 입력하세요.")
+            return 2
     # 입력 검증 
     if not os.path.isfile(args.code):
         _err(f"파일을 찾을 수 없습니다: {args.code}")
@@ -243,6 +255,7 @@ def run(args: argparse.Namespace) -> int:
             base_url=args.url.rstrip("/"),
             secret=args.secret.encode() if args.secret else b"",
             timeout=args.timeout,
+            strict_json=args.strict_json, timestamp_tolerance=args.timestamp_tolerance,
             state_create_path=args.state_create,
             state_query_template=args.state_query,
             # 버그 20 수정: 플랫폼 감지 결과를 DastConfig에 전달
@@ -252,6 +265,8 @@ def run(args: argparse.Namespace) -> int:
             platform_name=sig_format.platform.value if sig_format else "generic",
         )
         dast = DASTEngine(cfg)
+        endpoint_engines = {}
+        detections = PlatformDetector().detect_per_handler(pr) if _PLATFORM_AVAILABLE else {}
 
         # 대상 엔드포인트 결정
         if args.endpoints:
@@ -274,7 +289,22 @@ def run(args: argparse.Namespace) -> int:
             # Probe → Tier 결정
             print(f"\n  Probe (Tier 분류):")
             for path in target_paths:
-                probe = dast.probe(path, sig_header)
+                from dataclasses import replace
+                from analyzer.dast import ProbeResult
+                det = detections.get(next((h.name for h in pr.handlers if h.route_path == path), ""))
+                endpoint_cfg = replace(cfg)
+                if det:
+                    endpoint_cfg.sig_header = det.sig_format.sig_header
+                    endpoint_cfg.is_stripe = det.sig_format.is_stripe
+                    endpoint_cfg.is_slack = det.sig_format.is_slack
+                    endpoint_cfg.platform_name = det.platform.value
+                endpoint_engine = DASTEngine(endpoint_cfg)
+                endpoint_engines[path] = endpoint_engine
+                route = next((r for r in pr.routes if r.path == path), None)
+                if route and (route.method != "POST" or route.path_params):
+                    probe = ProbeResult(endpoint=path, validation_error="POST 이외 메서드 또는 미치환 경로 파라미터는 자동 시험 불가")
+                else:
+                    probe = endpoint_engine.probe(path)
                 probes[path] = probe
                 tier_icon = {"Tier 1": "🟢", "Tier 2": "🟡"}.get(
                     probe.tier.value, ""
@@ -288,7 +318,7 @@ def run(args: argparse.Namespace) -> int:
             print(f"\n  공격 (다운그레이드 + 재전송 + 타입혼동):")
             for path in target_paths:
                 probe = probes[path]
-                attacks = dast.run_all(path, probe)
+                attacks = endpoint_engines[path].run_all(path, probe)
                 all_attacks[path] = attacks
                 vulns = [a for a in attacks if a.vulnerable]
                 if vulns:
@@ -298,9 +328,12 @@ def run(args: argparse.Namespace) -> int:
                         for detail in a.details:
                             print(f"       {detail}")
                 else:
-                    print(f"  🟢 {path:35s}  전 공격 거부")
+                    print(f"  ⚪ {path:35s}  취약 처리 증거 미확인 — 세부 판정 확인 필요")
 
             all_endpoint_paths = target_paths
+            for endpoint_engine in endpoint_engines.values():
+                endpoint_engine.close()
+            dast.close()
     else:
         if args.sast_only:
             _warn("--sast-only 옵션: DAST 건너뜀")
@@ -308,74 +341,10 @@ def run(args: argparse.Namespace) -> int:
     # [5] 통합 리포트 생성
     _section("[5] 통합 리포트")
 
-    # 핸들러 이름 → 경로 매핑
-    handler_to_path = {
-        r.function_name: r.path
-        for r in pr.routes
-        if r.is_webhook
-    }
-    # is_webhook이 아닌 경우도 포함
-    for r in pr.routes:
-        if r.function_name not in handler_to_path:
-            handler_to_path[r.function_name] = r.path
-
-    # 엔드포인트별 SAST Finding 그룹핑
-    ep_sast: dict = {ep: [] for ep in all_endpoint_paths}
-    unmatched_sast = []
-    for f in sast_findings:
-        path = handler_to_path.get(f.handler_name)
-        if path and path in ep_sast:
-            ep_sast[path].append(f)
-        else:
-            unmatched_sast.append(f)
-
-    # 매핑되지 않은 Finding을 첫 번째 엔드포인트에 fallback 추가하여 누락 방지
-    if unmatched_sast and ep_sast:
-        first_ep = next(iter(ep_sast))
-        for f in unmatched_sast:
-            ep_sast[first_ep].append(f)
-
-    # SAST only 모드에서는 경로별로 가상의 엔드포인트 리포트 생성
-    if args.sast_only or not all_endpoint_paths:
-        ep_reports = []
-        seen_paths = set()
-        # 모듈 레벨 Finding(WHSEC-DYN)은 handler_name이 "(모듈 레벨)" 또는 "(파일 전체)"이므로
-        # 핸들러 이름 필터에서 누락됨 → 별도로 수집하여 첫 번째 핸들러에만 포함
-        MODULE_LEVEL_NAMES = {"(모듈 레벨)", "(파일 전체)"}
-        module_findings = [
-            f for f in sast_findings
-            if f.handler_name in MODULE_LEVEL_NAMES
-        ]
-        module_assigned = False
-        for h in pr.handlers:
-            path = h.route_path
-            if path in seen_paths:
-                continue
-            seen_paths.add(path)
-            h_findings = [f for f in sast_findings if f.handler_name == h.name]
-            # 첫 번째 핸들러에 모듈 레벨 Finding 포함
-            if not module_assigned:
-                h_findings = h_findings + module_findings
-                module_assigned = True
-            er = compute_endpoint_report(
-                path=path,
-                tier=Tier.TIER_2,
-                sast_findings=h_findings,
-                dast_results=[],
-            )
-            ep_reports.append(er)
-    else:
-        ep_reports = []
-        for path in all_endpoint_paths:
-            probe = probes.get(path)
-            tier = probe.tier if probe else Tier.TIER_2
-            er = compute_endpoint_report(
-                path=path,
-                tier=tier,
-                sast_findings=ep_sast.get(path, []),
-                dast_results=all_attacks.get(path, []),
-            )
-            ep_reports.append(er)
+    grouped = group_findings([pr], sast_findings)
+    paths = all_endpoint_paths or list(dict.fromkeys(h.route_path for h in pr.handlers))
+    ep_reports = [compute_endpoint_report(path, probes[path].tier if path in probes else Tier.TIER_2,
+                    grouped.get(path, []), all_attacks.get(path, [])) for path in paths]
 
     full = compute_full_report(
         target_file=os.path.basename(args.code),
@@ -388,7 +357,7 @@ def run(args: argparse.Namespace) -> int:
 
     # 종료 코드: 취약점 있으면 1
     has_vuln = full.total_sast_findings > 0 or full.total_dast_vulns > 0
-    return 1 if has_vuln else 0
+    return 1 if has_vuln else (2 if full.analysis_status == "partial" or not ep_reports else 0)
 
 
 # 진입점

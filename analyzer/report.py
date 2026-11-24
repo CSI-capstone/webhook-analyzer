@@ -4,15 +4,15 @@ analyzer/report.py
 등급 결정 엔진 + 리포트 출력
 
 SAST + DAST 결과를 통합하여:
-  1) CVSS v3.1 기반 등급 결정 (CRITICAL / HIGH / MEDIUM / LOW)
-  2) SAST↔DAST 상호 보정 (둘 다 탐지 시 신뢰도 ↑)
+  1) 규칙 참고 위험도와 동적 증거에 따른 등급 결정 (CRITICAL / HIGH / MEDIUM / LOW)
+  2) SAST↔DAST 상호 보정 (같은 항목의 증거가 있는지 확인)
   3) Tier별 동적 분석 신뢰도 표시
   4) 엔드포인트별 Finding + 수정 코드 스니펫 출력
 """
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from analyzer.sast import Finding, Severity
-from analyzer.dast import AttackResult, ProbeResult, Tier, Confidence, AttackType
+from analyzer.dast import AttackResult, ProbeResult, Tier, Confidence, AttackType, Verdict
 
 
 # 통합 리포트 데이터
@@ -27,6 +27,8 @@ class EndpointReport:
     overall_cvss: float = 0.0
     dast_confidence: str = ""
     combined_note: str = ""
+    analysis_status: str = "not_tested"
+    score_basis: str = "규칙별 참고 위험도; 환경별 CVSS 산출값 아님"
 
 
 @dataclass
@@ -37,6 +39,10 @@ class FullReport:
     total_sast_findings: int = 0
     total_dast_vulns: int = 0
     overall_grade: str = ""
+    total_dast_observations: int = 0
+    total_dast_inconclusive: int = 0
+    total_dast_skipped: int = 0
+    analysis_status: str = "complete"
 
 
 # 등급 결정
@@ -61,29 +67,30 @@ def compute_endpoint_report(
     er.dast_results = dast_results
     er.dast_confidence = TIER_CONFIDENCE_LABEL.get(tier, "")
 
-    # 최고 심각도 결정 (SAST + DAST 통합)
-    max_sev = Severity.INFO
-    max_cvss = 0.0
-
-    for f in sast_findings:
-        if SEV_ORDER[f.severity] > SEV_ORDER[max_sev]:
-            max_sev = f.severity
-        max_cvss = max(max_cvss, f.cvss_score)
-
-    # SAST + DAST 둘 다 탐지 시 보정 (등급은 SAST 기준, DAST는 신뢰도 보완만)
-    sast_vulns = {f.rule_id for f in sast_findings}
-    dast_vulns = {ar.attack_type for ar in dast_results if ar.vulnerable}
-
-    if sast_vulns and dast_vulns:
-        er.combined_note = "SAST+DAST 모두 탐지 → 정적·동적 분석 교차 확인됨"
-        max_cvss = min(max_cvss + 0.5, 10.0)
-    elif sast_vulns and not dast_vulns:
-        er.combined_note = "SAST만 탐지 — 동적 환경에서 추가 확인 권장"
-    elif dast_vulns and not sast_vulns:
-        er.combined_note = "DAST만 탐지 — CVSS 근거 없음, 소스 코드 직접 검토 권장"
-
+    meaningful = [f for f in sast_findings if f.severity != Severity.INFO]
+    max_sev = max((f.severity for f in meaningful), key=lambda s: SEV_ORDER[s], default=Severity.INFO)
+    max_cvss = max((f.cvss_score for f in meaningful), default=0.0)
+    dast_vulns = [a for a in dast_results if a.status == Verdict.VULNERABLE]
+    for attack in dast_vulns:
+        severity = Severity.HIGH if "WHSEC-001" in attack.related_rule_ids else Severity.MEDIUM
+        if SEV_ORDER[severity] > SEV_ORDER[max_sev]:
+            max_sev = severity
+    sast_rules = {r for f in meaningful for r in (f.related_rule_ids or [f.rule_id])}
+    dynamic_rules = {r for a in dast_vulns for r in a.related_rule_ids}
+    matched = sorted(sast_rules & dynamic_rules)
+    if matched:
+        er.combined_note = "같은 점검 항목의 정적·동적 증거 확인: " + ", ".join(matched)
+    elif meaningful and dast_vulns:
+        er.combined_note = "정적·동적 결과가 있으나 같은 결함의 교차 확인은 아님"
+    elif dast_vulns:
+        er.combined_note = "동적 처리 증거 확인; 소스 검토 권장"
+    elif meaningful:
+        er.combined_note = "정적 위험 징후 탐지; 동적 결과와 별도 해석"
+    unfinished = any(a.status in {Verdict.OBSERVED, Verdict.INCONCLUSIVE, Verdict.SKIPPED} for a in dast_results)
+    unfinished |= any(f.severity == Severity.INFO for f in sast_findings)
+    er.analysis_status = "partial" if unfinished else ("complete" if dast_results else "not_tested")
     er.overall_severity = max_sev
-    er.overall_cvss = max_cvss
+    er.overall_cvss = max_cvss  # 탐지 신뢰도를 이유로 CVSS에 가산하지 않는다.
     return er
 
 
@@ -102,21 +109,24 @@ def compute_full_report(
         len([a for a in er.dast_results if a.vulnerable])
         for er in endpoint_reports)
 
-    # 전체 등급
-    has_crit = any(er.overall_severity == Severity.CRITICAL for er in endpoint_reports)
-    has_high = any(er.overall_severity == Severity.HIGH for er in endpoint_reports)
-    has_medium = any(er.overall_severity == Severity.MEDIUM for er in endpoint_reports)
-    has_low = any(er.overall_severity == Severity.LOW for er in endpoint_reports)
-    if has_crit:
-        r.overall_grade = "F — 즉시 수정 필요"
-    elif has_high:
-        r.overall_grade = "D — 주요 취약점 존재"
-    elif has_medium:
-        r.overall_grade = "C — 개선 필요"
-    elif has_low:
-        r.overall_grade = "B — 경미한 취약점"
+    attacks = [a for endpoint in endpoint_reports for a in endpoint.dast_results]
+    r.total_dast_observations = sum(a.status == Verdict.OBSERVED for a in attacks)
+    r.total_dast_inconclusive = sum(a.status == Verdict.INCONCLUSIVE for a in attacks)
+    r.total_dast_skipped = sum(a.status == Verdict.SKIPPED for a in attacks)
+    partial = any(e.analysis_status == "partial" for e in endpoint_reports)
+    r.analysis_status = "partial" if partial else ("sast_only" if not attacks else "complete")
+    maximum = max((e.overall_severity for e in endpoint_reports), key=lambda s: SEV_ORDER[s], default=Severity.INFO)
+    grades = {Severity.CRITICAL: "F — 즉시 검토 필요", Severity.HIGH: "D — 주요 위험 징후",
+              Severity.MEDIUM: "C — 개선·검토 필요", Severity.LOW: "B — 경미한 위험 징후"}
+    if maximum in grades:
+        r.overall_grade = grades[maximum]
+    elif not endpoint_reports:
+        r.overall_grade = "N/A — 분석 대상 없음"
+        r.analysis_status = "partial"
+    elif partial:
+        r.overall_grade = "N/A — 추가 확인 필요"
     else:
-        r.overall_grade = "A — 양호"
+        r.overall_grade = "A — 점검 범위 내 미탐지"
 
     return r
 
@@ -130,7 +140,7 @@ def print_report(report: FullReport):
     print(f"  대상: {report.target_file}")
     print(f"  전체 등급: {report.overall_grade}")
     print(f"  SAST 탐지: {report.total_sast_findings}건")
-    print(f"  DAST 탐지: {report.total_dast_vulns}건")
+    print(f"  DAST 확인: {report.total_dast_vulns}건 | 수락 관측: {report.total_dast_observations}건 | 판단 불가: {report.total_dast_inconclusive}건 | 생략: {report.total_dast_skipped}건")
 
     for er in report.endpoints:
         print(f"\n{'─' * W}")
@@ -138,10 +148,10 @@ def print_report(report: FullReport):
                      "LOW": "🟢", "INFO": "⚪"}.get(er.overall_severity.value, "")
         print(f"  {sev_icon} {er.path}")
         print(f"  등급: {er.overall_severity.value} | "
-              f"CVSS: {er.overall_cvss:.1f} | {er.tier.value}")
+              f"참고 위험도: {er.overall_cvss:.1f} | {er.tier.value}")
         print(f"  동적분석 신뢰도: {er.dast_confidence}")
         if er.combined_note:
-            print(f"  보정: {er.combined_note}")
+            print(f"  교차 검토: {er.combined_note}")
 
         # SAST Findings
         if er.sast_findings:
@@ -170,10 +180,26 @@ def print_report(report: FullReport):
                 for d in a.details:
                     print(f"       {d}")
         if dast_safe:
-            print(f"\n  [동적 분석 — 안전]")
+            print(f"\n  [동적 분석 — 거부·관측·미완료]")
             for a in dast_safe:
-                print(f"    🟢 {a.attack_type.value:16s} | {a.description}")
+                print(f"    [{a.status.value}] {a.attack_type.value:16s} | {a.description}")
 
     print(f"\n{'=' * W}")
     print(f"  리포트 끝")
     print(f"{'=' * W}\n")
+
+
+def group_findings(parse_results, findings):
+    """외부 결함 위치(filepath)와 호출 핸들러 위치(origin_filepath)를 구분한다."""
+    lookup = {(pr.filepath, handler.name): handler.route_path
+              for pr in parse_results for handler in pr.handlers}
+    first_paths = {pr.filepath: pr.handlers[0].route_path for pr in parse_results if pr.handlers}
+    grouped = {path: [] for path in lookup.values()}
+    for finding in findings:
+        source = finding.origin_filepath or finding.filepath
+        path = lookup.get((source, finding.handler_name))
+        if finding.handler_name in {'(파일 전체)', '(모듈 레벨)'}:
+            path = first_paths.get(source)
+        if path in grouped:
+            grouped[path].append(finding)
+    return grouped

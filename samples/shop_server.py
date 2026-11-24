@@ -1,16 +1,16 @@
 """
 samples/shop_server.py
 
-  단국 굿즈샵 — TossPayments 결제 연동 서버 (시연용)
+  단국 굿즈샵 — 모의 HMAC 결제 연동 서버 (시연용)
 
 [시연 시나리오]
   이 서버는 단국대 굿즈를 판매하는 온라인 쇼핑몰 개발자가
-  토스페이먼츠 결제 웹훅을 연동한 상황을 가정합니다.
+  모의 HMAC 결제 웹훅을 연동한 상황을 가정합니다.
 
   "개발은 다 됐는데... 혹시 보안에 문제가 있지 않을까?"
-  → WebhookFilter에 코드를 입력하면 취약점을 자동으로 찾아줍니다.
+  → HookLens에 코드를 입력하면 취약점을 자동으로 찾아줍니다.
 
-[WebhookFilter 입력값]
+[HookLens 입력값]
   소스코드         : demo/shop_server.py (이 파일)
   웹훅 URL         : http://localhost:8000
   HMAC 시크릿 키   : dku-toss-secret-2026
@@ -19,7 +19,7 @@ samples/shop_server.py
 
 [예상 탐지 결과]
   WHSEC-002  HIGH    - 서명 비교에 == 사용 (타이밍 공격 취약)
-  WHSEC-004  MEDIUM  - toss-timestamp 헤더를 받지만 만료 검증 안 함
+  WHSEC-004  MEDIUM  - x-timestamp 헤더를 받지만 만료 검증 안 함
 
 [실행 방법]
   pip install fastapi uvicorn
@@ -36,7 +36,7 @@ from fastapi.responses import HTMLResponse
 # 앱 설정
 app = FastAPI(
     title="단국 굿즈샵",
-    description="토스페이먼츠 결제 연동 쇼핑몰 (WebhookFilter 시연용)",
+    description="모의 HMAC 결제 연동 쇼핑몰 (HookLens 시연용)",
     version="1.0.0",
 )
 
@@ -89,8 +89,8 @@ async def index():
     <body>
       <h1>🎓 단국 굿즈샵</h1>
       <p>단국대학교 공식 기념품 온라인 스토어입니다.</p>
-      <p>결제는 <strong>토스페이먼츠</strong>를 통해 처리됩니다.
-         <span class=\"badge\">WebhookFilter 시연용</span></p>
+      <p>결제는 <strong>모의 HMAC</strong>를 통해 처리됩니다.
+         <span class=\"badge\">HookLens 시연용</span></p>
 
       <h2>📦 상품 목록</h2>
       <table>
@@ -108,11 +108,11 @@ async def index():
         <tr><td>GET</td><td>/products</td><td>상품 목록 조회</td></tr>
         <tr><td>POST</td><td>/orders</td><td>주문 생성</td></tr>
         <tr><td>GET</td><td>/orders/{{id}}</td><td>주문 상태 조회</td></tr>
-        <tr><td>POST</td><td>/webhook/toss-payment</td><td>TossPayments 웹훅 수신</td></tr>
+        <tr><td>POST</td><td>/webhook/toss-payment</td><td>모의 HMAC 웹훅 수신</td></tr>
       </table>
 
       <footer>
-        ⚠️ 이 서버는 WebhookFilter 캡스톤 시연용 데모 서버입니다.
+        ⚠️ 이 서버는 HookLens 캡스톤 시연용 데모 서버입니다.
         실제 서비스에 사용하지 마세요.
       </footer>
     </body>
@@ -140,7 +140,7 @@ async def get_product(product_id: str):
 async def create_order(request: Request):
     """
     주문을 생성하고 order_id를 반환합니다.
-    WebhookFilter Tier 1: 상태 생성 경로로 사용됩니다.
+    HookLens Tier 1: 상태 생성 경로로 사용됩니다.
 
     요청 예시:
       {"product_id": "P001"}
@@ -183,36 +183,36 @@ async def list_orders():
 async def get_order(order_id: str):
     """
     주문 상태를 조회합니다.
-    WebhookFilter Tier 1: 상태 조회 경로로 사용됩니다.
+    HookLens Tier 1: 상태 조회 경로로 사용됩니다.
     """
     if order_id not in _order_db:
         raise HTTPException(status_code=404, detail="주문을 찾을 수 없습니다.")
     return _order_db[order_id]
 
 
-# TossPayments 웹훅 수신 엔드포인트
-# [의도된 취약점 — WebhookFilter 탐지 대상]
-#   WHSEC-002  (HIGH)   : 서명 비교에 == 연산자 사용 → 타이밍 공격으로 시크릿 키 추측 가능
-#   WHSEC-004  (MEDIUM) : "toss-timestamp" 헤더를 읽지만 time.time()과 비교하지 않음 → 만료된 요청 재전송(Replay) 공격 가능
+# 모의 HMAC 웹훅 수신 엔드포인트
+# [의도된 취약점 — HookLens 탐지 대상]
+#   WHSEC-002  (HIGH)   : 일반 비교 사용 — 타이밍 노출 가능성(시크릿 복구를 입증한 것은 아님)
+#   WHSEC-004  (MEDIUM) : "x-timestamp" 헤더를 읽지만 time.time()과 비교하지 않음 → 만료된 요청 재전송(Replay) 공격 가능
 @app.post("/webhook/toss-payment")
 async def toss_payment_webhook(
     request: Request,
-    tosspayments_webhook_signature: str = Header(None),
+    x_signature: str = Header(None),
 ):
     """
-    토스페이먼츠 결제 완료 웹훅을 수신하고 주문 상태를 업데이트합니다.
+    모의 HMAC 결제 완료 웹훅을 수신하고 주문 상태를 업데이트합니다.
 
-    토스페이먼츠 웹훅 형식:
-      헤더: TossPayments-Webhook-Signature: <Base64(HMAC-SHA256(secret, body))>
+    모의 HMAC 웹훅 형식:
+      헤더: X-Signature: sha256=<HMAC-SHA256 hex>
       바디: {"eventType": "PAYMENT_STATUS_CHANGED", "data": {...}}
     """
     payload = await request.body()
 
     # 서명 헤더 존재 여부 확인
-    if tosspayments_webhook_signature is None:
+    if x_signature is None:
         raise HTTPException(
             status_code=401,
-            detail="서명 헤더(TossPayments-Webhook-Signature)가 없습니다.",
+            detail="서명 헤더(X-Signature)가 없습니다.",
         )
 
     # Content-Type 검증
@@ -221,28 +221,27 @@ async def toss_payment_webhook(
         raise HTTPException(status_code=415, detail="Content-Type은 application/json이어야 합니다.")
 
     # [취약점 WHSEC-004]
-    # toss-timestamp 헤더를 읽기는 하지만,
+    # x-timestamp 헤더를 읽기는 하지만,
     # 현재 시각(time.time())과 비교하지 않아 재전송 공격에 취약합니다.
     # 안전한 코드:
     #   import time
-    #   ts = request.headers.get("toss-timestamp")
+    #   ts = request.headers.get("x-timestamp")
     #   if not ts or abs(time.time() - int(ts)) > 300:
     #       raise HTTPException(401, "요청이 만료되었습니다.")
-    timestamp = request.headers.get("toss-timestamp")  # 읽기만 하고 검증 안 함
+    timestamp = request.headers.get("x-timestamp")  # 읽기만 하고 검증 안 함
 
     # 서명 계산 
-    # 토스페이먼츠: HMAC-SHA256 결과를 Base64 인코딩
-    sig_bytes = hmac.new(WEBHOOK_SECRET, payload, hashlib.sha256).digest()
-    expected  = base64.b64encode(sig_bytes).decode()
+    # 사용자 정의 HMAC 프로토콜: 실제 결제 제공자와 연동하지 않는 모의 서비스
+    expected = "sha256=" + hmac.new(WEBHOOK_SECRET, payload, hashlib.sha256).hexdigest()
 
     # [취약점 WHSEC-002] 
     # == 연산자로 서명을 비교하면 Python이 문자를 앞에서부터 하나씩 비교하다가
     # 불일치하는 즉시 False를 반환합니다.
-    # 공격자는 응답 시간 차이를 측정해 올바른 서명을 추측할 수 있습니다.
+    # 실제 악용 가능성은 별도 검증이 필요하며, 여기서는 위험한 비교 패턴을 보여줍니다.
     # 안전한 코드:
-    #   if not hmac.compare_digest(tosspayments_webhook_signature, expected):
+    #   if not hmac.compare_digest(x_signature, expected):
     #       raise HTTPException(401, "서명이 올바르지 않습니다.")
-    if tosspayments_webhook_signature == expected:          # ← WHSEC-002 취약점
+    if x_signature == expected:          # ← WHSEC-002 취약점
         data = await request.json()
 
         # 배열로 래핑된 요청(타입 혼동 공격 Stage B)은 400으로 거부
@@ -251,8 +250,8 @@ async def toss_payment_webhook(
 
         # 결제 완료 → 주문 상태 업데이트
         order_id = (
-            data.get("data", {}).get("orderId")   # 토스페이먼츠 표준 형식
-            or data.get("order_id")               # WebhookFilter 테스트 형식
+            data.get("data", {}).get("orderId")   # 모의 HMAC 표준 형식
+            or data.get("order_id")               # HookLens 테스트 형식
         )
 
         if order_id and str(order_id) in _order_db:

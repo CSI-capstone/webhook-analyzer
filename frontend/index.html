@@ -1,1412 +1,3161 @@
 <!doctype html>
 <html lang="ko">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Webhook Security Analyzer</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>HookLens · 웹훅 보안 분석</title>
     <style>
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-
       :root {
-        --bg: #f0f2f8;
-        --surface: #ffffff;
-        --surface2: #f5f7fc;
-        --border: #dde2ef;
-        --text: #1a1d2e;
-        --muted: #7b84a8;
-        --accent: #4a5be8;
-        --accent2: #3b4dd4;
-        --critical: #e53e3e;
-        --high: #dd6b20;
-        --medium: #d69e2e;
-        --low: #38a169;
-        --info: #3182ce;
+        --bg: #f5f7fb;
+        --surface: #fff;
+        --ink: #18263d;
+        --muted: #66758b;
+        --line: #e3e8f0;
+        --accent: #315be7;
+        --accent-soft: #edf2ff;
+        --nav: #111e34;
+        --critical: #c72d47;
+        --high: #c45325;
+        --medium: #946513;
+        --success: #167a60;
+        --radius: 14px;
+        --shadow: 0 3px 16px #23345a05;
       }
-
+      * {
+        box-sizing: border-box;
+      }
       body {
-        font-family: "Segoe UI", system-ui, sans-serif;
+        margin: 0;
         background: var(--bg);
-        color: var(--text);
-        min-height: 100vh;
-        padding-bottom: 60px;
+        color: var(--ink);
+        font-family:
+          Inter,
+          "Pretendard",
+          "Noto Sans KR",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          "Malgun Gothic",
+          sans-serif;
+        font-size: 15px;
+        line-height: 1.6;
       }
-
-      /* Layout */
-      header {
-        background: var(--surface);
-        border-bottom: 1px solid var(--border);
-        box-shadow: 0 1px 4px rgba(74, 91, 232, 0.07);
-        padding: 14px 32px;
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      button,
+      a,
+      input,
+      select,
+      summary {
+        touch-action: manipulation;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      summary:focus-visible {
+        outline: 3px solid #7396ff;
+        outline-offset: 3px;
+      }
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: #7d9afa;
+        box-shadow: 0 0 0 3px #315be713;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      h1 {
+        font-size: 27px;
+        letter-spacing: -1px;
+        line-height: 1.4;
+      }
+      h2 {
+        font-size: 18px;
+        letter-spacing: -0.5px;
+      }
+      h3 {
+        font-size: 15px;
+      }
+      small,
+      .muted {
+        color: var(--muted);
+      }
+      .mono,
+      code,
+      pre {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+      .icon {
+        width: 19px;
+        height: 19px;
+        flex: none;
+        vertical-align: middle;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .hidden,
+      [hidden] {
+        display: none !important;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .skip-link {
+        position: fixed;
+        top: -70px;
+        left: 250px;
+        background: white;
+        padding: 12px;
+        z-index: 50;
+      }
+      .skip-link:focus {
+        top: 12px;
+      }
+      .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: 218px;
+        background: var(--nav);
+        color: #c2ccdc;
+        display: flex;
+        flex-direction: column;
+        padding: 30px 16px;
+        z-index: 20;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 8px 31px;
+        color: white;
+        font-weight: 720;
+        font-size: 19px;
+        letter-spacing: -0.7px;
+      }
+      .brandmark {
+        width: 32px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        background: #315be7;
+        border-radius: 10px;
+        color: #fff;
+      }
+      .brandmark .icon {
+        width: 22px;
+        height: 22px;
+      }
+      .nav-caption {
+        padding: 0 12px;
+        font-size: 12px;
+        letter-spacing: 1.6px;
+        color: #73859e;
+        margin: 10px 0;
+      }
+      .nav-button {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        width: 100%;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        border-radius: 8px;
+        padding: 11px 13px;
+        margin: 3px 0;
+        text-align: left;
+        font-size: 14px;
+      }
+      .nav-button:hover {
+        background: #ffffff09;
+      }
+      .nav-button.active {
+        background: #315be7;
+        color: #fff;
+      }
+      .nav-button:disabled {
+        opacity: 0.35;
+      }
+      .sidebar-bottom {
+        margin-top: auto;
+        padding: 20px 11px 0;
+        border-top: 1px solid #ffffff12;
+        font-size: 13px;
+        color: #8b9bb2;
+      }
+      .sidebar-bottom strong {
+        display: block;
+        font-weight: 500;
+        color: #d6dfeb;
+        margin-bottom: 7px;
+      }
+      .sidebar-bottom .version {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 12px;
+        color: #687e9c;
+      }
+      .app {
+        margin-left: 218px;
+        min-height: 100vh;
+      }
+      .topbar {
+        height: 70px;
+        border-bottom: 1px solid var(--line);
+        background: #ffffffdb;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 38px;
+        gap: 20px;
+      }
+      .breadcrumb {
+        font-size: 14px;
+        color: var(--muted);
         display: flex;
         align-items: center;
         gap: 12px;
       }
-      .logo {
-        width: 34px;
-        height: 34px;
-        background: linear-gradient(135deg, var(--accent), #7c3aed);
-        border-radius: 9px;
-        display: grid;
-        place-items: center;
-        font-size: 17px;
-        box-shadow: 0 2px 8px rgba(74, 91, 232, 0.3);
+      .breadcrumb b {
+        color: #384760;
+        font-weight: 550;
       }
-      header h1 {
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--text);
-      }
-      header p {
-        font-size: 11px;
+      .workspace-label {
+        font-size: 13px;
+        display: flex;
+        gap: 7px;
+        align-items: center;
         color: var(--muted);
-        margin-top: 1px;
       }
-      .container {
-        max-width: 920px;
-        margin: 0 auto;
-        padding: 32px 20px 0;
+      .workspace-label .icon {
+        width: 14px;
+        height: 14px;
       }
-
-      /* Card */
+      .main {
+        max-width: 1510px;
+        margin: auto;
+        padding: 34px 38px 28px;
+      }
+      .page-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 26px;
+      }
+      .eyebrow {
+        font-size: 12px;
+        color: var(--accent);
+        font-weight: 700;
+        letter-spacing: 1.7px;
+        margin-bottom: 7px;
+      }
+      .subtitle {
+        color: var(--muted);
+        margin-top: 8px;
+        font-size: 14px;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: white;
+        color: var(--ink);
+        padding: 10px 15px;
+        font-size: 14px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .button:hover:not(:disabled) {
+        border-color: #b2c0d5;
+        background: #fafbfe;
+      }
+      .button.primary {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+      .button.primary:hover:not(:disabled) {
+        background: #244bc9;
+      }
+      .button.quiet {
+        background: transparent;
+      }
+      .button.small {
+        padding: 6px 10px;
+        font-size: 13px;
+      }
+      .button .icon {
+        width: 16px;
+        height: 16px;
+      }
+      .heading-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
       .card {
         background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 24px;
-        margin-bottom: 20px;
-        box-shadow: 0 1px 6px rgba(74, 91, 232, 0.06);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
       }
-      .card-title {
-        font-size: 14px;
-        font-weight: 700;
-        margin-bottom: 18px;
-        color: var(--text);
+      .card-heading {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        padding-bottom: 19px;
       }
-
-      /* Form */
-      .form-grid {
+      .step-number {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
+        place-items: center;
+        width: 27px;
+        height: 27px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 700;
+        font-size: 14px;
+        border-radius: 8px;
       }
-      .form-group {
+      .card-heading .desc {
+        font-size: 13px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .setup-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 296px;
+        gap: 22px;
+        align-items: start;
+      }
+      .setup-main {
+        padding: 25px;
+      }
+      .section-divider {
+        height: 1px;
+        background: var(--line);
+        margin: 25px 0;
+      }
+      .dropzone {
+        border: 1.5px dashed #b9c7dc;
+        border-radius: 11px;
+        min-height: 171px;
+        background: #fafcff;
         display: flex;
         flex-direction: column;
-        gap: 5px;
-      }
-      .form-group.full {
-        grid-column: 1/-1;
-      }
-      label {
-        font-size: 12px;
-        color: var(--muted);
-        font-weight: 500;
-      }
-      .req {
-        color: var(--critical);
-        margin-left: 2px;
-      }
-      input[type="text"] {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 9px 12px;
-        font-size: 14px;
-        color: var(--text);
-        outline: none;
-        transition:
-          border-color 0.2s,
-          box-shadow 0.2s;
-      }
-      input:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(74, 91, 232, 0.1);
-      }
-      input.input-error {
-        border-color: var(--critical) !important;
-      }
-      .field-error-msg {
-        font-size: 11px;
-        color: var(--critical);
-        margin-top: 4px;
-        display: none;
-      }
-      .field-error-msg.visible {
-        display: block;
-      }
-
-      /* Dropzone */
-      .dropzone {
-        border: 2px dashed var(--border);
-        border-radius: 8px;
-        padding: 28px 20px;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 15px;
+        gap: 7px;
         text-align: center;
+        transition:
+          background 0.2s,
+          border 0.2s;
         cursor: pointer;
-        transition: 0.2s;
-        position: relative;
       }
       .dropzone:hover,
       .dropzone.drag-over {
         border-color: var(--accent);
-        background: rgba(91, 106, 240, 0.05);
-      }
-      .dropzone input[type="file"] {
-        position: absolute;
-        inset: 0;
-        opacity: 0;
-        cursor: pointer;
-      }
-      .dropzone-icon {
-        font-size: 28px;
-        margin-bottom: 8px;
-      }
-      .dropzone-text {
-        font-size: 13px;
-        color: var(--muted);
-      }
-      .dropzone-text strong {
-        color: var(--accent2);
-      }
-      .dropzone-hint {
-        font-size: 11px;
-        color: var(--muted);
-        margin-top: 4px;
-      }
-      .file-name {
-        display: none;
-        align-items: center;
-        gap: 8px;
-        justify-content: center;
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--low);
+        background: #f0f4ff;
       }
       .dropzone.has-file {
-        border-color: var(--low);
+        border-style: solid;
+        border-color: #8ca8f2;
+        background: #f4f7ff;
       }
-      .dropzone.has-file .dropzone-icon,
-      .dropzone.has-file .dropzone-text {
-        display: none;
+      .upload-symbol {
+        width: 40px;
+        height: 40px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        margin-bottom: 5px;
       }
-      .dropzone.has-file .file-name {
-        display: flex;
-      }
-
-      /* Buttons */
-      .btn-row {
-        display: flex;
-        gap: 8px;
-        margin-top: 18px;
-      }
-      .btn-analyze {
-        flex: 1;
-        padding: 12px;
-        background: linear-gradient(135deg, var(--accent), #7c3aed);
-        color: #fff;
-        border: none;
-        border-radius: 8px;
+      .drop-title {
         font-size: 14px;
         font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        transition: 0.2s;
-        box-shadow: 0 2px 10px rgba(74, 91, 232, 0.3);
       }
-      .btn-analyze:hover {
-        opacity: 0.9;
-        box-shadow: 0 4px 16px rgba(74, 91, 232, 0.4);
-        transform: translateY(-1px);
+      .drop-title span {
+        color: var(--accent);
       }
-      .btn-analyze:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      .btn-print {
-        display: none;
-        padding: 12px 18px;
-        background: var(--surface);
-        color: var(--text);
-        border: 1px solid var(--border);
-        border-radius: 8px;
+      .drop-hint {
         font-size: 13px;
-        font-weight: 500;
+        color: var(--muted);
+      }
+      .file-detail {
+        font-size: 13px;
+        color: var(--accent);
+        word-break: break-all;
+      }
+      .mode-switch {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .mode-option {
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 13px;
         cursor: pointer;
-        align-items: center;
-        gap: 6px;
-        transition: 0.2s;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-      }
-      .btn-print:hover {
-        border-color: var(--accent);
-        background: var(--surface2);
-      }
-      .btn-print.visible {
         display: flex;
+        align-items: flex-start;
+        gap: 9px;
       }
-
-      /* Loading */
-      #loading {
-        display: none;
+      .mode-option:has(input:checked) {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+      }
+      .mode-option input {
+        accent-color: var(--accent);
+        margin: 4px 0 0;
+      }
+      .mode-option strong {
+        font-size: 14px;
+        display: block;
+      }
+      .mode-option small {
+        font-size: 12px;
+        display: block;
+        margin-top: 3px;
+      }
+      .field {
+        display: flex;
         flex-direction: column;
+        gap: 7px;
+        min-width: 0;
+      }
+      .field label {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .field label small {
+        font-weight: 400;
+        font-size: 12px;
+        margin-left: 5px;
+      }
+      .field input,
+      .search-input,
+      .filter-select {
+        width: 100%;
+        border: 1px solid #dce3ed;
+        border-radius: 7px;
+        background: #fff;
+        color: var(--ink);
+        padding: 10px 12px;
+        font-size: 14px;
+        min-width: 0;
+      }
+      .field input:disabled {
+        background: #f4f6fa;
+        color: #8792a3;
+      }
+      .field-note {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      .two-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-top: 17px;
+      }
+      .secret-wrap {
+        display: flex;
+        position: relative;
+      }
+      .secret-wrap input {
+        padding-right: 42px;
+      }
+      .icon-button {
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        border-radius: 5px;
+      }
+      .icon-button:hover {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .secret-wrap .icon-button {
+        position: absolute;
+        right: 3px;
+        top: 3px;
+      }
+      .advanced {
+        margin-top: 20px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+      }
+      .advanced summary {
+        list-style: none;
+        display: flex;
         align-items: center;
-        gap: 14px;
-        padding: 40px;
+        justify-content: space-between;
+        padding: 12px 14px;
+        font-size: 14px;
+        font-weight: 550;
+        cursor: pointer;
+      }
+      .advanced summary::-webkit-details-marker {
+        display: none;
+      }
+      .advanced summary .icon {
+        width: 15px;
+        height: 15px;
+        transition: transform 0.15s;
+      }
+      .advanced[open] summary .icon {
+        transform: rotate(180deg);
+      }
+      .advanced-body {
+        padding: 0 14px 16px;
+      }
+      .advanced-body .two-columns {
+        margin-top: 8px;
+      }
+      .check-field {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        font-size: 14px;
+        margin-top: 16px;
+        cursor: pointer;
+      }
+      .check-field input {
+        margin-top: 4px;
+        accent-color: var(--accent);
+      }
+      .check-field small {
+        display: block;
+        font-size: 12px;
+        margin-top: 2px;
+      }
+      .form-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 15px;
+        margin-top: 22px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+      }
+      .form-footer .button {
+        padding: 11px 22px;
+      }
+      .form-footer p {
+        font-size: 12px;
+        color: var(--muted);
+        max-width: 290px;
+      }
+      .side-card {
+        padding: 22px;
+        margin-bottom: 17px;
+      }
+      .side-card h3 {
+        font-size: 14px;
+        margin-bottom: 16px;
+      }
+      .process-step {
+        display: flex;
+        gap: 11px;
+        position: relative;
+        padding-bottom: 21px;
+      }
+      .process-step:last-child {
+        padding-bottom: 0;
+      }
+      .process-step:not(:last-child):before {
+        content: "";
+        position: absolute;
+        left: 12px;
+        top: 28px;
+        bottom: 3px;
+        width: 1px;
+        background: var(--line);
+      }
+      .process-icon {
+        width: 26px;
+        height: 26px;
+        display: grid;
+        place-items: center;
+        background: #f1f4fa;
+        color: #637696;
+        border-radius: 7px;
+        flex: none;
+      }
+      .process-icon .icon {
+        width: 15px;
+        height: 15px;
+      }
+      .process-step b {
+        display: block;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .process-step p {
+        font-size: 13px;
+        color: var(--muted);
+        margin-top: 3px;
+      }
+      .scope-line {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        padding: 8px 0;
+        border-bottom: 1px solid #eef1f6;
+      }
+      .scope-line:last-child {
+        border: 0;
+      }
+      .scope-line strong {
+        font-weight: 600;
+      }
+      .platform-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 15px;
+      }
+      .platform-chips span {
+        font-size: 11px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 3px 7px;
+        color: #52647e;
+      }
+      .help-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: 17px;
+        border: 0;
+        background: none;
+        padding: 0;
+        width: 100%;
+        text-align: left;
+      }
+      .help-link:hover {
+        color: var(--accent);
+      }
+      .info-strip {
+        margin-top: 18px;
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        background: #edf2fb;
+        border: 1px solid #e2e9f4;
+        border-radius: 8px;
+        padding: 12px 14px;
+        font-size: 13px;
+        color: #5e7190;
+      }
+      .info-strip .icon {
+        width: 15px;
+        height: 15px;
+        margin-top: 2px;
+      }
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        color: #8c97a8;
+        font-size: 12px;
+        margin-top: 28px;
+        gap: 15px;
+      }
+      .loading-card {
+        padding: 65px 20px;
         text-align: center;
+        margin-bottom: 20px;
       }
       .spinner {
         width: 36px;
         height: 36px;
-        border: 3px solid var(--border);
+        border: 3px solid #e5ebf9;
         border-top-color: var(--accent);
         border-radius: 50%;
-        animation: spin 0.8s linear infinite;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+      .loading-card h2 {
+        margin-bottom: 8px;
+      }
+      .loading-meta {
+        display: flex;
+        justify-content: center;
+        gap: 9px;
+        margin-top: 24px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .loading-meta span {
+        padding: 5px 10px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+      }
+      .error-box {
+        border: 1px solid #f0c6cd;
+        background: #fff4f5;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 18px;
+        overflow-wrap: anywhere;
+      }
+      .error-box strong {
+        display: block;
+        color: #a92d42;
+        margin-bottom: 7px;
+      }
+      .error-box p {
+        font-size: 14px;
+      }
+      .notice {
+        padding: 12px 15px;
+        border: 1px solid #e9d8b5;
+        background: #fffaf0;
+        color: #80602d;
+        border-radius: 8px;
+        font-size: 13px;
+        margin-bottom: 14px;
+        overflow-wrap: anywhere;
+      }
+      .notice strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+      .report-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 18px;
+      }
+      .report-top h1 {
+        font-size: 24px;
+        word-break: break-all;
+      }
+      .report-meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: 8px;
+      }
+      .pill {
+        font-size: 12px;
+        padding: 3px 8px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        color: #60728b;
+        background: #f8fafd;
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+        white-space: nowrap;
+      }
+      .pill.blue {
+        background: var(--accent-soft);
+        border-color: #dce5ff;
+        color: var(--accent);
+      }
+      .pill.amber {
+        background: #fff7e5;
+        border-color: #efdfbc;
+        color: #956c1f;
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: 1.3fr 1fr 1fr 1fr;
+        gap: 13px;
+        margin-bottom: 19px;
+      }
+      .metric {
+        padding: 18px 20px;
+        background: white;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+      }
+      .metric-label {
+        font-size: 12px;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .metric-label .icon {
+        width: 14px;
+        height: 14px;
+      }
+      .metric-value {
+        font-size: 29px;
+        font-weight: 650;
+        letter-spacing: -1px;
+        line-height: 1.3;
+        margin-top: 9px;
+      }
+      .metric-sub {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+      .grade-F .metric-value {
+        color: var(--critical);
+      }
+      .grade-D .metric-value {
+        color: var(--high);
+      }
+      .grade-C .metric-value {
+        color: var(--medium);
+      }
+      .grade-A .metric-value {
+        color: var(--success);
+      }
+      .grade-unknown .metric-value {
+        color: #68778c;
+      }
+      .analysis-scope {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+        margin: 0 0 20px;
+      }
+      .analysis-scope .icon {
+        width: 14px;
+        height: 14px;
+        margin-top: 2px;
+      }
+      .workbench {
+        display: grid;
+        grid-template-columns: 278px minmax(0, 1fr);
+        align-items: start;
+        gap: 18px;
+      }
+      .endpoint-list {
+        overflow: hidden;
+      }
+      .list-title {
+        display: flex;
+        justify-content: space-between;
+        padding: 18px 17px 12px;
+        align-items: center;
+      }
+      .list-title h2 {
+        font-size: 14px;
+      }
+      .list-controls {
+        padding: 0 12px 12px;
+        display: grid;
+        gap: 8px;
+      }
+      .search-input,
+      .filter-select {
+        font-size: 13px;
+        padding: 8px 10px;
+      }
+      .endpoint-items {
+        border-top: 1px solid var(--line);
+        max-height: 650px;
+        overflow: auto;
+      }
+      .endpoint-button {
+        width: 100%;
+        display: block;
+        text-align: left;
+        background: white;
+        border: 0;
+        border-bottom: 1px solid #edf1f6;
+        border-left: 3px solid transparent;
+        padding: 15px 13px;
+      }
+      .endpoint-button:last-child {
+        border-bottom: 0;
+      }
+      .endpoint-button:hover {
+        background: #f9fbff;
+      }
+      .endpoint-button.active {
+        border-left-color: var(--accent);
+        background: #f0f4ff;
+      }
+      .endpoint-button .path {
+        display: flex;
+        align-items: flex-start;
+        gap: 7px;
+        font-family: Consolas, monospace;
+        font-size: 13px;
+        color: #273c5b;
+        overflow-wrap: anywhere;
+        line-height: 1.8;
+      }
+      .method {
+        font-family: inherit;
+        font-size: 10px;
+        color: #487b66;
+        background: #edf6f1;
+        padding: 2px 4px;
+        line-height: 1.5;
+        border-radius: 3px;
+        margin-top: 3px;
+        flex: none;
+      }
+      .endpoint-button .counts {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 11px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        display: inline-block;
+        border-radius: 50%;
+        background: #99a8bc;
+      }
+      .dot.CRITICAL {
+        background: var(--critical);
+      }
+      .dot.HIGH {
+        background: var(--high);
+      }
+      .dot.MEDIUM {
+        background: #c99530;
+      }
+      .dot.LOW {
+        background: #6195bd;
+      }
+      .dot.INFO {
+        background: #9aa8b8;
+      }
+      .endpoint-detail {
+        min-width: 0;
+        overflow: hidden;
+      }
+      .detail-heading {
+        padding: 23px 24px 19px;
+      }
+      .endpoint-title {
+        font-family: Consolas, monospace;
+        font-size: 18px;
+        overflow-wrap: anywhere;
+        line-height: 1.6;
+      }
+      .detail-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 12px;
+      }
+      .severity {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        font-weight: 650;
+        padding: 3px 7px;
+        border-radius: 4px;
+        white-space: nowrap;
+        background: #f0f3f8;
+        color: #6a7d96;
+      }
+      .severity.CRITICAL {
+        background: #fcebf0;
+        color: #b92f49;
+      }
+      .severity.HIGH {
+        background: #fff0e8;
+        color: #b55227;
+      }
+      .severity.MEDIUM {
+        background: #fff6df;
+        color: #94701c;
+      }
+      .severity.LOW {
+        background: #eef4fb;
+        color: #4d78a4;
+      }
+      .severity.INFO {
+        background: #f0f3f8;
+        color: #6a7d96;
+      }
+      .tabs {
+        display: flex;
+        padding: 0 24px;
+        border-bottom: 1px solid var(--line);
+        gap: 21px;
+        overflow: auto;
+      }
+      .tab-button {
+        padding: 13px 0;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: none;
+        color: var(--muted);
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      .tab-button.active {
+        border-bottom-color: var(--accent);
+        color: var(--accent);
+        font-weight: 650;
+      }
+      .tab-count {
+        font-size: 11px;
+        background: #eef1f7;
+        border-radius: 4px;
+        padding: 1px 5px;
+        margin-left: 3px;
+      }
+      .detail-content {
+        padding: 23px 24px;
+        min-height: 300px;
+      }
+      .section-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 13px;
+      }
+      .section-title h3 {
+        font-size: 14px;
+      }
+      .section-title small {
+        font-size: 12px;
+      }
+      .overview-section + .overview-section {
+        margin-top: 25px;
+        padding-top: 22px;
+        border-top: 1px solid var(--line);
+      }
+      .evidence-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 14px;
+        border: 1px solid #dfe8fa;
+        background: #f7faff;
+        border-radius: 8px;
+        font-size: 13px;
+        margin-bottom: 19px;
+        color: #506c96;
+      }
+      .evidence-banner .icon {
+        color: var(--accent);
+        width: 17px;
+        height: 17px;
+        margin-top: 1px;
+      }
+      .probe-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+      }
+      .probe-step {
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 11px 9px;
+      }
+      .probe-step .number {
+        font-size: 10px;
+        letter-spacing: 1px;
+        color: #8c9ab0;
+      }
+      .probe-step b {
+        font-size: 12px;
+        display: block;
+        margin: 5px 0 8px;
+        font-weight: 550;
+      }
+      .probe-step strong {
+        font-family: Consolas, monospace;
+        font-size: 14px;
+        font-weight: 600;
+        color: #546984;
+      }
+      .probe-step strong.ok {
+        color: var(--success);
+      }
+      .probe-step strong.warn {
+        color: #a8781b;
+      }
+      .finding-summary {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 11px 12px;
+        margin-top: 8px;
+      }
+      .finding-summary span:nth-child(2) {
+        font-size: 13px;
+        flex: 1;
+      }
+      .finding-summary small {
+        font-family: Consolas, monospace;
+        font-size: 12px;
+      }
+      .link-button {
+        background: none;
+        border: 0;
+        color: var(--accent);
+        font-size: 12px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .link-button:hover {
+        text-decoration: underline;
+      }
+      .mini-results {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 9px;
+      }
+      .mini-result {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 13px 11px;
+      }
+      .mini-result b {
+        font-size: 13px;
+        font-weight: 550;
+        display: block;
+        margin-bottom: 7px;
+      }
+      .mini-result p {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 7px;
+      }
+      .state-label {
+        font-size: 12px;
+        color: #74839a;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .state-label.vulnerable {
+        color: #bf364e;
+      }
+      .state-label.rejected {
+        color: var(--success);
+      }
+      .state-label.observed {
+        color: #9c7321;
+      }
+      .state-label.inconclusive,
+      .state-label.skipped {
+        color: #758398;
+      }
+      .state-label .icon {
+        width: 12px;
+        height: 12px;
+      }
+      .finding {
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        margin-bottom: 12px;
+        overflow: hidden;
+      }
+      .finding summary {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 14px;
+        cursor: pointer;
+      }
+      .finding summary::-webkit-details-marker {
+        display: none;
+      }
+      .finding summary .finding-title {
+        flex: 1;
+        font-size: 14px;
+        font-weight: 550;
+      }
+      .finding summary .rule {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .finding summary > .icon {
+        width: 14px;
+        height: 14px;
+        color: var(--muted);
+      }
+      .finding[open] summary > .icon {
+        transform: rotate(180deg);
+      }
+      .finding-body {
+        border-top: 1px solid var(--line);
+        padding: 16px;
+      }
+      .finding-message {
+        font-size: 14px;
+        color: #52627a;
+        line-height: 1.8;
+        margin-bottom: 14px;
+        overflow-wrap: anywhere;
+      }
+      .source-location {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 8px;
+        overflow-wrap: anywhere;
+      }
+      .code-panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        margin: 10px 0 16px;
+      }
+      .code-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #f5f7fc;
+        border-bottom: 1px solid var(--line);
+        padding: 9px 12px;
+        font-size: 12px;
+        color: #60718c;
+      }
+      .code-heading .button {
+        font-size: 11px;
+        padding: 3px 7px;
+      }
+      .code-block {
+        margin: 0;
+        padding: 14px;
+        color: #263f61;
+        background: #fbfcff;
+        font-size: 13px;
+        line-height: 1.9;
+        overflow: auto;
+        max-height: 370px;
+        tab-size: 4;
+      }
+      .source-code {
+        padding: 9px 0;
+      }
+      .code-line {
+        display: block;
+        min-width: max-content;
+        padding: 0 14px 0 0;
+      }
+      .code-line.marked {
+        background: #fff0d7;
+        border-left: 2px solid #d19b38;
+        padding-right: 14px;
+      }
+      .line-no {
+        user-select: none;
+        display: inline-block;
+        text-align: right;
+        width: 42px;
+        margin-right: 15px;
+        color: #94a1b4;
+        font-size: 12px;
+      }
+      .recommendation {
+        padding: 12px 14px;
+        background: #f0f4ff;
+        border-radius: 7px;
+        color: #4a6294;
+        font-size: 13px;
+        line-height: 1.8;
+        margin: 12px 0;
+      }
+      .recommendation strong {
+        display: block;
+        color: #365690;
+        margin-bottom: 4px;
+        font-weight: 600;
+      }
+      .rule-doc {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 11px;
+      }
+      .score-note {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 10px;
+      }
+      .dast-group + .dast-group {
+        margin-top: 25px;
+      }
+      .dast-group-title {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 14px;
+        margin-bottom: 11px;
+      }
+      .dast-item {
+        border: 1px solid var(--line);
+        border-left: 3px solid #a4b1c4;
+        border-radius: 8px;
+        padding: 14px;
+        margin-bottom: 9px;
+      }
+      .dast-item.vuln {
+        border-left-color: #ce455d;
+      }
+      .dast-item.safe {
+        border-left-color: #39977a;
+      }
+      .dast-item.pending {
+        border-left-color: #b7a16b;
+      }
+      .dast-item-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 9px;
+      }
+      .variant {
+        font-family: Consolas, monospace;
+        font-size: 12px;
+        color: #69809b;
+        overflow-wrap: anywhere;
+      }
+      .dast-desc {
+        font-size: 13px;
+        color: #52637b;
+        line-height: 1.8;
+      }
+      .dast-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 12px;
+      }
+      .dast-item details {
+        margin-top: 11px;
+      }
+      .dast-item details summary {
+        font-size: 12px;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .dast-details {
+        font-size: 12px;
+        line-height: 1.9;
+        color: #5c6f8a;
+        background: #f7f9fc;
+        padding: 10px 12px;
+        border-radius: 6px;
+        margin-top: 7px;
+        overflow-wrap: anywhere;
+      }
+      .state-changed {
+        font-size: 12px;
+        color: #aa354e;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        margin-top: 9px;
+      }
+      .state-changed .icon {
+        width: 13px;
+        height: 13px;
+      }
+      .empty-state {
+        padding: 35px 16px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 14px;
+        border: 1px dashed var(--line);
+        border-radius: 9px;
+        background: #fcfdff;
+      }
+      .empty-state .icon {
+        display: block;
+        width: 26px;
+        height: 26px;
+        margin: 0 auto 12px;
+        color: #92a3bd;
+      }
+      .empty-state p {
+        font-size: 12px;
+        margin-top: 6px;
+      }
+      .file-list {
+        margin-top: 20px;
+        font-size: 12px;
+        color: var(--muted);
+        overflow-wrap: anywhere;
+      }
+      .dialog {
+        width: min(610px, calc(100% - 32px));
+        max-height: 85vh;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 27px;
+        color: var(--ink);
+        box-shadow: 0 20px 90px #101e3430;
+      }
+      .dialog::backdrop {
+        background: #15274066;
+        backdrop-filter: blur(3px);
+      }
+      .dialog-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .dialog p,
+      .dialog li {
+        font-size: 14px;
+        color: #5b6f8b;
+        line-height: 1.9;
+      }
+      .dialog h3 {
+        margin: 20px 0 8px;
+      }
+      .dialog table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .dialog td {
+        padding: 9px 5px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      .dialog td:first-child {
+        font-family: Consolas, monospace;
+        color: var(--accent);
+        width: 105px;
+      }
+      .toast {
+        position: fixed;
+        bottom: 26px;
+        left: calc(50% + 109px);
+        transform: translateX(-50%);
+        background: #1a2c48;
+        color: white;
+        padding: 10px 17px;
+        font-size: 14px;
+        border-radius: 8px;
+        z-index: 100;
+        box-shadow: 0 4px 24px #172c4720;
+      }
+      .print-report {
+        display: none;
       }
       @keyframes spin {
         to {
           transform: rotate(360deg);
         }
       }
-      #results {
-        display: none;
-      }
-
-      /* Grade banner */
-      .grade-banner {
-        border-radius: 10px;
-        padding: 20px 24px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 14px;
-        margin-bottom: 20px;
-      }
-      .grade-banner.grade-F {
-        background: rgba(229, 62, 62, 0.07);
-        border: 1px solid rgba(229, 62, 62, 0.25);
-      }
-      .grade-banner.grade-D {
-        background: rgba(221, 107, 32, 0.07);
-        border: 1px solid rgba(221, 107, 32, 0.25);
-      }
-      .grade-banner.grade-C {
-        background: rgba(214, 158, 46, 0.07);
-        border: 1px solid rgba(214, 158, 46, 0.25);
-      }
-      .grade-banner.grade-A {
-        background: rgba(56, 161, 105, 0.07);
-        border: 1px solid rgba(56, 161, 105, 0.25);
-      }
-      .grade-score {
-        font-size: 44px;
-        font-weight: 700;
-        line-height: 1;
-      }
-      .grade-banner.grade-F .grade-score {
-        color: var(--critical);
-      }
-      .grade-banner.grade-D .grade-score {
-        color: var(--high);
-      }
-      .grade-banner.grade-C .grade-score {
-        color: var(--medium);
-      }
-      .grade-banner.grade-A .grade-score {
-        color: var(--low);
-      }
-      .grade-details h2 {
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 4px;
-      }
-      .grade-details p {
-        font-size: 12px;
-        color: var(--muted);
-      }
-      .grade-stats {
-        display: flex;
-        gap: 20px;
-      }
-      .grade-stat {
-        text-align: center;
-      }
-      .grade-stat .num {
-        font-size: 26px;
-        font-weight: 700;
-      }
-      .grade-stat .lbl {
-        font-size: 11px;
-        color: var(--muted);
-        margin-top: 2px;
-      }
-      .grade-stat.sast .num {
-        color: var(--high);
-      }
-      .grade-stat.dast .num {
-        color: var(--critical);
-      }
-
-      /* Badges */
-      .platform-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-bottom: 20px;
-      }
-      .badge {
-        padding: 3px 9px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 600;
-        border: 1px solid;
-      }
-      .badge-github {
-        color: #7c8ff7;
-        border-color: rgba(124, 143, 247, 0.4);
-        background: rgba(124, 143, 247, 0.1);
-      }
-      .badge-stripe {
-        color: #a78bfa;
-        border-color: rgba(167, 139, 250, 0.4);
-        background: rgba(167, 139, 250, 0.1);
-      }
-      .badge-toss {
-        color: #60bbf7;
-        border-color: rgba(96, 187, 247, 0.4);
-        background: rgba(96, 187, 247, 0.1);
-      }
-      .badge-slack {
-        color: #f0c060;
-        border-color: rgba(240, 192, 96, 0.4);
-        background: rgba(240, 192, 96, 0.1);
-      }
-      .badge-portone {
-        color: #60d0a0;
-        border-color: rgba(96, 208, 160, 0.4);
-        background: rgba(96, 208, 160, 0.1);
-      }
-      .badge-generic {
-        color: var(--muted);
-        border-color: var(--border);
-        background: var(--surface2);
-      }
-      .badge-tier1 {
-        color: var(--low);
-        border-color: rgba(82, 196, 26, 0.4);
-        background: rgba(82, 196, 26, 0.08);
-      }
-      .badge-tier2 {
-        color: var(--medium);
-        border-color: rgba(250, 173, 20, 0.4);
-        background: rgba(250, 173, 20, 0.08);
-      }
-
-      /* Warn / doc-link / error */
-      .warn-box {
-        background: rgba(250, 173, 20, 0.08);
-        border: 1px solid rgba(250, 173, 20, 0.3);
-        border-radius: 8px;
-        padding: 12px 16px;
-        color: #faad14;
-        font-size: 13px;
-        margin-bottom: 14px;
-      }
-      .warn-box strong {
-        display: block;
-        margin-bottom: 3px;
-      }
-      .doc-link-banner {
-        background: rgba(91, 106, 240, 0.08);
-        border: 1px solid rgba(91, 106, 240, 0.25);
-        border-radius: 7px;
-        padding: 10px 14px;
-        margin-bottom: 16px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        font-size: 13px;
-      }
-      .doc-link-banner span {
-        color: var(--muted);
-      }
-      .doc-link-banner a {
-        color: var(--accent2);
-        text-decoration: none;
-        font-weight: 500;
-      }
-      .doc-link-banner a:hover {
-        text-decoration: underline;
-      }
-      .error-box {
-        background: rgba(255, 77, 79, 0.1);
-        border: 1px solid rgba(255, 77, 79, 0.35);
-        border-radius: 8px;
-        padding: 18px 22px;
-        color: #ff8080;
-        font-size: 14px;
-      }
-      .error-box strong {
-        display: block;
-        font-size: 15px;
-        margin-bottom: 5px;
-        color: var(--critical);
-      }
-
-      /* Endpoint cards */
-      .endpoint-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        margin-bottom: 14px;
-        overflow: hidden;
-        box-shadow: 0 1px 5px rgba(74, 91, 232, 0.05);
-      }
-      .endpoint-header {
-        padding: 12px 18px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        cursor: pointer;
-        user-select: none;
-      }
-      .endpoint-header:hover {
-        background: var(--surface2);
-      }
-      .sev-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        flex-shrink: 0;
-      }
-      .sev-dot.CRITICAL {
-        background: var(--critical);
-      }
-      .sev-dot.HIGH {
-        background: var(--high);
-      }
-      .sev-dot.MEDIUM {
-        background: var(--medium);
-      }
-      .sev-dot.LOW {
-        background: var(--low);
-      }
-      .sev-dot.INFO {
-        background: var(--info);
-      }
-      .endpoint-path {
-        font-family: monospace;
-        font-size: 13px;
-        font-weight: 600;
-        flex: 1;
-      }
-      .endpoint-meta {
-        display: flex;
-        gap: 7px;
-        align-items: center;
-      }
-      .sev-badge {
-        font-size: 10px;
-        font-weight: 700;
-        padding: 2px 7px;
-        border-radius: 4px;
-      }
-      .sev-badge.CRITICAL {
-        background: rgba(229, 62, 62, 0.12);
-        color: var(--critical);
-        font-weight: 700;
-      }
-      .sev-badge.HIGH {
-        background: rgba(221, 107, 32, 0.12);
-        color: var(--high);
-        font-weight: 700;
-      }
-      .sev-badge.MEDIUM {
-        background: rgba(214, 158, 46, 0.15);
-        color: var(--medium);
-        font-weight: 700;
-      }
-      .sev-badge.LOW {
-        background: rgba(56, 161, 105, 0.12);
-        color: var(--low);
-        font-weight: 700;
-      }
-      .sev-badge.INFO {
-        background: rgba(49, 130, 206, 0.12);
-        color: var(--info);
-        font-weight: 700;
-      }
-      .cvss-score {
-        font-size: 11px;
-        color: var(--muted);
-      }
-      .chevron {
-        font-size: 11px;
-        color: var(--muted);
-        transition: transform 0.2s;
-      }
-      .endpoint-card.expanded .chevron {
-        transform: rotate(90deg);
-      }
-      .endpoint-body {
-        display: none;
-        border-top: 1px solid var(--border);
-      }
-      .endpoint-card.expanded .endpoint-body {
-        display: block;
-      }
-
-      /* Tabs */
-      .tabs {
-        display: flex;
-        border-bottom: 1px solid var(--border);
-      }
-      .tab-btn {
-        padding: 9px 18px;
-        font-size: 12px;
-        font-weight: 500;
-        color: var(--muted);
-        background: none;
-        border: none;
-        border-bottom: 2px solid transparent;
-        cursor: pointer;
-        transition: 0.15s;
-        margin-bottom: -1px;
-      }
-      .tab-btn.active {
-        color: var(--accent2);
-        border-bottom-color: var(--accent);
-      }
-      .tab-content {
-        display: none;
-        padding: 18px;
-      }
-      .tab-content.active {
-        display: block;
-      }
-
-      /* Findings */
-      .finding {
-        border: 1px solid var(--border);
-        border-radius: 7px;
-        margin-bottom: 10px;
-        overflow: hidden;
-      }
-      .finding-header {
-        padding: 10px 14px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        cursor: pointer;
-        background: var(--surface2);
-      }
-      .finding-header:hover {
-        background: #edf0f8;
-      }
-      .finding-rule {
-        font-family: monospace;
-        font-size: 11px;
-        color: var(--muted);
-        min-width: 90px;
-      }
-      .finding-msg {
-        font-size: 13px;
-        flex: 1;
-      }
-      .finding-line {
-        font-size: 11px;
-        color: var(--muted);
-      }
-      .finding-file {
-        font-size: 11px;
-        color: var(--muted);
-        font-family: monospace;
-        background: var(--surface2);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        padding: 1px 6px;
-        max-width: 180px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .finding-body {
-        display: none;
-        padding: 12px 14px;
-        border-top: 1px solid var(--border);
-      }
-      .finding.open .finding-body {
-        display: block;
-      }
-      .finding-rec {
-        font-size: 13px;
-        color: var(--muted);
-        margin-bottom: 10px;
-      }
-      .finding-rec strong {
-        color: var(--text);
-      }
-      pre.fix-snippet {
-        background: #1e2235;
-        border: 1px solid #2d3555;
-        border-radius: 8px;
-        padding: 14px;
-        font-size: 12px;
-        font-family: "JetBrains Mono", "Fira Code", monospace;
-        color: #a8c8ff;
-        overflow: auto;
-        white-space: pre;
-        line-height: 1.7;
-        max-height: 260px;
-      }
-      .snippet-label {
-        font-size: 10px;
-        color: var(--muted);
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 5px;
-      }
-      .rule-doc-link {
-        margin-top: 10px;
-        padding: 7px 11px;
-        background: rgba(91, 106, 240, 0.06);
-        border: 1px solid rgba(91, 106, 240, 0.2);
-        border-radius: 5px;
-        font-size: 12px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-      .rule-doc-link a {
-        color: var(--accent2);
-        text-decoration: none;
-      }
-      .rule-doc-link a:hover {
-        text-decoration: underline;
-      }
-
-      /* DAST */
-      .dast-confidence {
-        font-size: 12px;
-        color: var(--muted);
-        margin-bottom: 12px;
-        padding: 9px 12px;
-        background: var(--surface2);
-        border: 1px solid var(--border);
-        border-radius: 7px;
-      }
-      .dast-item {
-        border: 1px solid var(--border);
-        border-radius: 7px;
-        padding: 12px 14px;
-        margin-bottom: 8px;
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-      }
-      .dast-item.vuln {
-        border-left: 3px solid var(--critical);
-      }
-      .dast-item.safe {
-        border-left: 3px solid var(--low);
-      }
-      .dast-icon {
-        font-size: 16px;
-        flex-shrink: 0;
-      }
-      .dast-info {
-        flex: 1;
-      }
-      .dast-type {
-        font-size: 11px;
-        color: var(--muted);
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
-        margin-bottom: 3px;
-      }
-      .dast-desc {
-        font-size: 13px;
-        font-weight: 500;
-      }
-      .dast-details {
-        font-size: 12px;
-        color: var(--muted);
-        margin-top: 5px;
-        line-height: 1.6;
-      }
-      .conf-badge {
-        font-size: 10px;
-        font-weight: 700;
-        padding: 2px 6px;
-        border-radius: 4px;
-        flex-shrink: 0;
-      }
-      .conf-badge.HIGH {
-        background: rgba(229, 62, 62, 0.12);
-        color: var(--critical);
-      }
-      .conf-badge.MEDIUM {
-        background: rgba(214, 158, 46, 0.12);
-        color: var(--medium);
-      }
-      .conf-badge.LOW {
-        background: rgba(49, 130, 206, 0.12);
-        color: var(--info);
-      }
-      .state-changed {
-        margin-top: 5px;
-        font-size: 12px;
-        color: var(--critical);
-        font-weight: 600;
-      }
-
-      /* Misc */
-      .empty-state {
-        text-align: center;
-        padding: 28px;
-        color: var(--muted);
-        font-size: 13px;
-      }
-      .empty-state span {
-        display: block;
-        font-size: 24px;
-        margin-bottom: 8px;
-      }
-      .meta-row {
-        font-size: 11px;
-        color: var(--muted);
-        padding: 10px 0;
-        border-top: 1px solid var(--border);
-        margin-top: 14px;
-      }
-      .meta-row strong {
-        color: var(--text);
-      }
-
-      /* Print */
-      .print-header {
-        display: none;
-      }
-      @media print {
-        * {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *:before,
+        *:after {
+          animation: none !important;
+          transition: none !important;
+          scroll-behavior: auto !important;
         }
-        header,
-        #form-card,
-        #loading,
-        .btn-print,
-        .btn-row,
-        .tabs,
-        .tab-btn,
-        .chevron {
-          display: none !important;
+      }
+      @media (min-width: 1500px) {
+        .setup-grid {
+          grid-template-columns: minmax(0, 1fr) 320px;
         }
-        body {
-          background: #fff;
-          color: #111;
-          padding: 0;
+        .setup-main {
+          padding: 30px;
         }
-        .container {
-          padding: 0;
-          max-width: 100%;
+        .side-card {
+          padding: 25px;
         }
-        .endpoint-body,
-        .tab-content,
-        .finding-body {
-          display: block !important;
+        .workbench {
+          grid-template-columns: 300px minmax(0, 1fr);
         }
-        .card,
-        .endpoint-card,
-        .finding,
-        .dast-item {
-          border: 1px solid #ccc !important;
-          background: #fff !important;
-          break-inside: avoid;
+      }
+      @media (max-width: 1150px) {
+        .sidebar {
+          width: 190px;
+          padding: 26px 12px;
         }
-        .endpoint-header {
-          background: #f5f5f5 !important;
-        }
-        .finding-header {
-          background: #f0f0f0 !important;
-        }
-        .grade-score,
-        .grade-details h2,
-        .endpoint-path,
-        .finding-msg,
-        .dast-desc {
-          color: #111 !important;
-        }
-        .grade-details p,
-        .finding-rule,
-        .finding-line,
-        .dast-type,
-        .dast-details {
-          color: #555 !important;
-        }
-        .grade-banner {
-          border: 2px solid #999 !important;
-        }
-        .grade-banner.grade-F .grade-score {
-          color: #c00 !important;
-        }
-        .grade-banner.grade-A .grade-score {
-          color: #060 !important;
-        }
-        pre.fix-snippet {
-          background: #f8f8f8 !important;
-          color: #222 !important;
-          border: 1px solid #ddd !important;
-          max-height: none !important;
-          font-size: 11px !important;
-        }
-        @page {
-          margin: 20mm 15mm;
-        }
-        .endpoint-card {
-          page-break-inside: avoid;
-        }
-        .grade-banner {
-          page-break-after: avoid;
-        }
-        .print-header {
-          display: block !important;
+        .brand {
           font-size: 18px;
-          font-weight: 700;
-          margin-bottom: 14px;
-          padding-bottom: 8px;
-          border-bottom: 2px solid #333;
-          color: #111;
+          gap: 8px;
+        }
+        .app {
+          margin-left: 190px;
+        }
+        .topbar {
+          padding: 0 25px;
+        }
+        .main {
+          padding: 28px 25px;
+        }
+        .setup-grid {
+          grid-template-columns: minmax(0, 1fr) 245px;
+          gap: 16px;
+        }
+        .setup-main {
+          padding: 20px;
+        }
+        .side-card {
+          padding: 18px;
+        }
+        .workbench {
+          grid-template-columns: 235px minmax(0, 1fr);
+          gap: 13px;
+        }
+        .detail-heading,
+        .detail-content {
+          padding: 20px;
+        }
+        .tabs {
+          padding: 0 20px;
+          gap: 15px;
+        }
+        .summary-grid {
+          gap: 10px;
+        }
+        .metric {
+          padding: 16px;
+        }
+        .probe-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .toast {
+          left: calc(50% + 95px);
         }
       }
-
-      @media (max-width: 640px) {
-        .form-grid {
+      @media (max-width: 900px) {
+        .sidebar {
+          width: 72px;
+          padding: 24px 10px;
+        }
+        .brand {
+          padding: 0 0 26px;
+          justify-content: center;
+        }
+        .brand-name,
+        .nav-caption,
+        .nav-button span,
+        .sidebar-bottom {
+          display: none;
+        }
+        .nav-button {
+          padding: 13px;
+          justify-content: center;
+        }
+        .app {
+          margin-left: 72px;
+        }
+        .setup-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .setup-side {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 15px;
+        }
+        .side-card {
+          margin: 0;
+        }
+        .side-card:last-child {
+          display: none;
+        }
+        .workbench {
+          grid-template-columns: 210px minmax(0, 1fr);
+        }
+        .metric-value {
+          font-size: 25px;
+        }
+        .metric-sub {
+          font-size: 11px;
+        }
+        .mini-results {
           grid-template-columns: 1fr;
         }
-        header {
-          padding: 14px 18px;
+        .mini-result {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
         }
-        .container {
-          padding: 18px 14px 0;
+        .mini-result b {
+          margin: 0;
         }
-        .grade-banner {
+        .mini-result p {
+          display: none;
+        }
+        .toast {
+          left: calc(50% + 36px);
+        }
+      }
+      @media (max-width: 680px) {
+        body {
+          font-size: 14px;
+        }
+        .sidebar {
+          position: static;
+          width: auto;
+          height: 60px;
+          padding: 0 16px;
+          flex-direction: row;
+          align-items: center;
+          gap: 10px;
+        }
+        .brand {
+          padding: 0;
+          gap: 8px;
+          margin-right: auto;
+          font-size: 17px;
+        }
+        .brand-name {
+          display: block;
+        }
+        .brandmark {
+          width: 27px;
+          height: 29px;
+          border-radius: 8px;
+        }
+        .sidebar nav {
+          display: flex;
+          gap: 3px;
+        }
+        .nav-button {
+          margin: 0;
+          width: 34px;
+          height: 34px;
+          padding: 8px;
+        }
+        .nav-caption {
+          display: none;
+        }
+        .nav-secondary {
+          display: none !important;
+        }
+        .app {
+          margin-left: 0;
+        }
+        .topbar {
+          height: 45px;
+          padding: 0 18px;
+        }
+        .breadcrumb {
+          font-size: 12px;
+          gap: 8px;
+        }
+        .workspace-label {
+          font-size: 11px;
+        }
+        .main {
+          padding: 24px 17px;
+        }
+        .page-heading {
+          align-items: flex-start;
+          gap: 10px;
+          margin-bottom: 20px;
+        }
+        h1 {
+          font-size: 23px;
+        }
+        .subtitle {
+          font-size: 13px;
+          max-width: 255px;
+        }
+        .heading-actions .button {
+          padding: 8px 9px;
+          font-size: 12px;
+        }
+        .setup-main {
+          padding: 18px;
+        }
+        .mode-option {
+          padding: 10px;
+          gap: 6px;
+        }
+        .mode-option small {
+          font-size: 11px;
+        }
+        .two-columns {
+          grid-template-columns: 1fr;
+        }
+        .setup-side {
+          display: none;
+        }
+        .form-footer {
+          flex-direction: column-reverse;
+          align-items: stretch;
+        }
+        .form-footer p {
+          max-width: none;
+          text-align: center;
+        }
+        .summary-grid {
+          grid-template-columns: 1fr 1fr;
+          gap: 9px;
+        }
+        .metric {
+          padding: 14px;
+        }
+        .metric-value {
+          font-size: 26px;
+        }
+        .report-top {
+          align-items: flex-start;
+        }
+        .report-top h1 {
+          font-size: 21px;
+        }
+        .report-top .heading-actions {
+          max-width: 155px;
+          justify-content: flex-end;
+        }
+        .workbench {
+          grid-template-columns: 1fr;
+        }
+        .endpoint-items {
+          max-height: 200px;
+        }
+        .endpoint-button {
+          padding: 10px 12px;
+        }
+        .endpoint-button .counts {
+          margin-top: 4px;
+        }
+        .list-controls {
+          grid-template-columns: 1.5fr 1fr;
+        }
+        .list-title {
+          padding: 13px;
+        }
+        .detail-heading {
+          padding: 18px;
+        }
+        .endpoint-title {
+          font-size: 16px;
+        }
+        .tabs {
+          padding: 0 18px;
+          gap: 18px;
+        }
+        .detail-content {
+          padding: 18px;
+        }
+        .finding summary {
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .finding summary .finding-title {
+          min-width: 50%;
+          font-size: 13px;
+        }
+        .finding summary .rule {
+          order: 3;
+          width: 100%;
+        }
+        .finding-body {
+          padding: 13px;
+        }
+        .footer {
+          font-size: 11px;
           flex-direction: column;
+          gap: 5px;
         }
-        .grade-stats {
-          gap: 14px;
+        .toast {
+          left: 50%;
+          width: max-content;
+          max-width: 90%;
         }
-        .btn-row {
-          flex-direction: column;
+        .skip-link {
+          left: 20px;
+        }
+        .code-block {
+          font-size: 12px;
+        }
+        .section-title small {
+          font-size: 11px;
+        }
+      }
+      @media print {
+        body {
+          background: #fff;
+          font-size: 11px;
+        }
+        .sidebar,
+        .topbar,
+        #setup-view,
+        #loading,
+        #error-region,
+        #results-view,
+        .footer,
+        dialog,
+        .toast {
+          display: none !important;
+        }
+        .app {
+          margin: 0;
+        }
+        .main {
+          padding: 0;
+          max-width: none;
+        }
+        .print-report {
+          display: block !important;
+        }
+        .print-report h1 {
+          font-size: 22px;
+          margin-bottom: 12px;
+        }
+        .print-report h2 {
+          font-size: 16px;
+          margin: 23px 0 10px;
+        }
+        .print-report h3 {
+          font-size: 13px;
+          margin: 14px 0 7px;
+        }
+        .print-report p {
+          margin: 5px 0;
+        }
+        .print-report .finding,
+        .print-report .dast-item {
+          break-inside: avoid;
+        }
+        .print-report .code-block {
+          max-height: none;
+          white-space: pre-wrap;
+          overflow: visible;
+          font-size: 9px;
+        }
+        .print-report .button,
+        .print-report .rule-doc {
+          display: none;
+        }
+        .print-report .finding-body {
+          display: block;
+        }
+        .print-report .finding summary {
+          display: flex;
+        }
+        .print-report .source-code {
+          padding: 7px 0;
+        }
+        .print-report a {
+          color: inherit;
+        }
+        .print-report .notice {
+          font-size: 10px;
+        }
+        .print-report .pill {
+          font-size: 9px;
         }
       }
     </style>
   </head>
   <body>
-    <header>
-      <div class="logo">🔍</div>
-      <div>
-        <h1>WebhookFilter</h1>
-        <p>웹훅 핸들러 보안 취약점 자동 탐지 프레임워크</p>
+    <svg aria-hidden="true" width="0" height="0" style="position: absolute">
+      <defs>
+        <symbol id="i-shield" viewBox="0 0 24 24">
+          <path d="m12 3 8 3v5c0 5-4 8-8 10-4-2-8-5-8-10V6l8-3Z" />
+          <path d="m8.5 12 2.5 2.5 4.5-5" />
+        </symbol>
+        <symbol id="i-grid" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </symbol>
+        <symbol id="i-chart" viewBox="0 0 24 24">
+          <path d="M4 3v17h17M8 15v-4m5 4V6m5 9v-6" />
+        </symbol>
+        <symbol id="i-code" viewBox="0 0 24 24">
+          <path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18" />
+        </symbol>
+        <symbol id="i-book" viewBox="0 0 24 24">
+          <path
+            d="M12 5v16M3 4h5a4 4 0 0 1 4 3 4 4 0 0 1 4-3h5v15h-5a4 4 0 0 0-4 2 4 4 0 0 0-4-2H3Z"
+          />
+        </symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24">
+          <path d="M12 16V3m-5 5 5-5 5 5M4 15v5h16v-5" />
+        </symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24">
+          <path d="M4 12h16m-6-6 6 6-6 6" />
+        </symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24">
+          <path d="m6 9 6 6 6-6" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24">
+          <path d="m5 12 4 4L19 6" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 11v6m0-10v.5" />
+        </symbol>
+        <symbol id="i-bolt" viewBox="0 0 24 24">
+          <path d="m13 2-9 12h7l-1 8 10-12h-7l1-8Z" />
+        </symbol>
+        <symbol id="i-file" viewBox="0 0 24 24">
+          <path d="M14 2H5v20h14V7l-5-5Zm0 0v6h5M8 13h8m-8 4h6" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24">
+          <rect x="4" y="10" width="16" height="11" rx="2" />
+          <path d="M8 10V6a4 4 0 0 1 8 0v4m-4 5v2" />
+        </symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24">
+          <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" />
+          <circle cx="12" cy="12" r="3" />
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24">
+          <rect x="8" y="8" width="13" height="13" rx="2" />
+          <path d="M16 8V3H3v13h5" />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24">
+          <path d="m6 6 12 12M6 18 18 6" />
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 24 24">
+          <path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4" />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 6v6l4 2" />
+        </symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24">
+          <path d="m12 3 10 18H2L12 3Zm0 6v5m0 3v.5" />
+        </symbol>
+        <symbol id="i-print" viewBox="0 0 24 24">
+          <path d="M6 9V3h12v6M6 18H3V9h18v9h-3M6 14h12v8H6Z" />
+        </symbol>
+      </defs>
+    </svg>
+    <a class="skip-link" href="#main-content">본문으로 이동</a>
+    <aside class="sidebar" aria-label="주 메뉴">
+      <div class="brand">
+        <span class="brandmark"
+          ><svg class="icon"><use href="#i-shield" /></svg></span
+        ><span class="brand-name">HookLens</span>
       </div>
-    </header>
-
-    <div class="container">
-      <div class="card" id="form-card">
-        <div class="card-title">📂 분석 설정</div>
-        <form id="analyze-form">
-          <div class="form-group full" style="margin-bottom: 14px">
-            <label>소스 코드 파일 <span class="req">*</span></label>
-            <div class="dropzone" id="dropzone">
+      <nav>
+        <div class="nav-caption">WORKSPACE</div>
+        <button class="nav-button active" id="nav-new" title="새 분석">
+          <svg class="icon"><use href="#i-grid" /></svg><span>새 분석</span>
+        </button>
+        <button class="nav-button" id="nav-results" disabled title="분석 결과">
+          <svg class="icon"><use href="#i-chart" /></svg><span>분석 결과</span>
+        </button>
+        <div class="nav-caption" style="margin-top: 32px">RESOURCES</div>
+        <button
+          class="nav-button nav-secondary"
+          data-dialog="scope-dialog"
+          title="점검 범위"
+        >
+          <svg class="icon"><use href="#i-shield" /></svg><span>점검 범위</span>
+        </button>
+        <button
+          class="nav-button nav-secondary"
+          data-dialog="guide-dialog"
+          title="실행 가이드"
+        >
+          <svg class="icon"><use href="#i-book" /></svg><span>실행 가이드</span>
+        </button>
+      </nav>
+      <div class="sidebar-bottom">
+        <strong>수신 코드의 보안을,<br />배포 전에 확인하세요.</strong>정적
+        분석과 실제 요청 시험을<br />하나의 결과로 살펴봅니다.
+        <div class="version">
+          <span>Python</span><span>SAST 5 · DAST 3</span>
+        </div>
+      </div>
+    </aside>
+    <div class="app">
+      <header class="topbar">
+        <div class="breadcrumb">
+          워크스페이스 <span>/</span><b id="breadcrumb-current">새 분석</b>
+        </div>
+        <div class="workspace-label">
+          <svg class="icon"><use href="#i-lock" /></svg>웹훅 수신 코드 점검
+        </div>
+      </header>
+      <main class="main" id="main-content">
+        <section id="setup-view" aria-labelledby="setup-title">
+          <div class="page-heading">
+            <div>
+              <div class="eyebrow">WEBHOOK SECURITY WORKSPACE</div>
+              <h1 id="setup-title">웹훅 보안 분석</h1>
+              <p class="subtitle">
+                수신 코드를 살펴보고, 시험 요청으로 실제 동작을 확인하세요.
+              </p>
+            </div>
+            <div class="heading-actions">
+              <button class="button quiet" id="demo-preset">
+                <svg class="icon"><use href="#i-bolt" /></svg>시연 설정
+              </button>
+            </div>
+          </div>
+          <div class="setup-grid">
+            <form id="analyze-form" class="card setup-main">
+              <div class="card-heading">
+                <span class="step-number">01</span>
+                <div>
+                  <h2>분석할 코드</h2>
+                  <p class="desc">
+                    Python 파일 또는 프로젝트 ZIP을 선택하세요.
+                  </p>
+                </div>
+              </div>
+              <label class="dropzone" id="dropzone" for="code-file"
+                ><span class="upload-symbol"
+                  ><svg class="icon"><use href="#i-upload" /></svg></span
+                ><span class="drop-title" id="drop-title"
+                  ><span>파일 선택</span> 또는 여기에 끌어다 놓기</span
+                ><span class="drop-hint"
+                  >.py · .zip &nbsp; / &nbsp; 최대 10 MiB</span
+                ><span class="file-detail" id="file-name-display" hidden></span
+              ></label>
               <input
+                class="sr-only"
                 type="file"
                 id="code-file"
                 name="code"
                 accept=".py,.zip"
                 required
+                aria-label="분석할 Python 또는 ZIP 파일"
               />
-              <div class="dropzone-icon">📁</div>
-              <div class="dropzone-text">
-                <strong>클릭하여 파일 선택</strong> 또는 드래그 앤 드롭
+              <div class="section-divider"></div>
+              <div class="card-heading">
+                <span class="step-number">02</span>
+                <div>
+                  <h2>분석 방식</h2>
+                  <p class="desc">
+                    실행 중인 테스트 서버가 있으면 동적 시험을 함께 진행할 수
+                    있어요.
+                  </p>
+                </div>
               </div>
-              <div class="dropzone-hint">
-                .py 단일 파일 또는 .zip 압축 파일 (최대 10MB)
-              </div>
-              <div class="file-name" id="file-name-display">
-                <span>✅</span><span id="file-name-text"></span>
-              </div>
-            </div>
-          </div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>웹훅 수신 URL <span class="req">*</span></label>
-              <input
-                type="text"
-                name="webhook_url"
-                id="webhook-url"
-                placeholder="http://localhost:8000"
-              />
-              <span class="field-error-msg" id="url-error"
-                >웹훅 수신 URL을 입력해주세요.</span
-              >
-            </div>
-            <div class="form-group">
-              <label
-                >HMAC 시크릿 키
-                <span style="color: var(--muted); font-size: 10px"
-                  >(선택 — 비우면 재전송 공격 생략)</span
-                ></label
-              >
-              <input
-                type="text"
-                name="secret"
-                placeholder="예) mysecretkey123"
-              />
-              <span
-                style="font-size: 11px; color: var(--muted); margin-top: 3px"
-                >테스트 서버의 시크릿 키를 입력하면 재전송 공격까지
-                검증합니다.</span
-              >
-            </div>
-            <div class="form-group">
-              <label
-                >상태 생성 경로
-                <span style="color: var(--muted); font-size: 10px"
-                  >(Tier 1, 선택)</span
-                ></label
-              >
-              <input
-                type="text"
-                name="state_create"
-                placeholder="예) /payments"
-              />
-            </div>
-            <div class="form-group">
-              <label
-                >상태 조회 경로 템플릿
-                <span style="color: var(--muted); font-size: 10px"
-                  >(Tier 1, 선택)</span
+              <div class="mode-switch">
+                <label class="mode-option"
+                  ><input
+                    type="radio"
+                    name="sast_only"
+                    value="false"
+                    checked
+                  /><span
+                    ><strong>정적 + 동적 분석</strong
+                    ><small>코드 검사와 수신 서버 시험</small></span
+                  ></label
+                ><label class="mode-option"
+                  ><input type="radio" name="sast_only" value="true" /><span
+                    ><strong>정적 분석만</strong
+                    ><small>서버 실행 없이 코드 검사</small></span
+                  ></label
                 >
-              </label>
-              <input
-                type="text"
-                name="state_query"
-                placeholder="예) /payments/{id}"
-              />
-            </div>
+              </div>
+              <div id="dynamic-fields">
+                <div class="field">
+                  <label for="webhook-url">수신 서버 기본 URL</label
+                  ><input
+                    type="url"
+                    id="webhook-url"
+                    name="webhook_url"
+                    placeholder="http://127.0.0.1:8000"
+                    autocomplete="off"
+                    required
+                  />
+                  <p class="field-note">
+                    업로드한 코드가 실행 중인 서버 주소를 입력하세요. 웹훅
+                    경로는 코드에서 찾습니다.
+                  </p>
+                </div>
+                <div class="field" style="margin-top: 17px">
+                  <label for="secret"
+                    >서명 시크릿 키
+                    <small>정상 서명 요청을 만드는 데 사용</small></label
+                  >
+                  <div class="secret-wrap">
+                    <input
+                      type="password"
+                      id="secret"
+                      name="secret"
+                      placeholder="테스트 환경의 웹훅 시크릿"
+                      autocomplete="off"
+                      spellcheck="false"
+                    /><button
+                      type="button"
+                      class="icon-button"
+                      id="toggle-secret"
+                      aria-label="시크릿 표시"
+                      aria-pressed="false"
+                    >
+                      <svg class="icon"><use href="#i-eye" /></svg>
+                    </button>
+                  </div>
+                  <p class="field-note">
+                    키를 비우면 유효 서명이 필요한 동적 시험은 생략됩니다.
+                  </p>
+                </div>
+                <details class="advanced" id="advanced-settings">
+                  <summary>
+                    고급 설정 <svg class="icon"><use href="#i-chevron" /></svg>
+                  </summary>
+                  <div class="advanced-body">
+                    <p class="field-note">
+                      상태 생성·조회 경로를 입력하면 시험 전후의 처리 상태를
+                      비교합니다.
+                    </p>
+                    <div class="two-columns">
+                      <div class="field">
+                        <label for="state-create">상태 생성 경로</label
+                        ><input
+                          id="state-create"
+                          name="state_create"
+                          placeholder="/orders"
+                          autocomplete="off"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="state-query">상태 조회 경로</label
+                        ><input
+                          id="state-query"
+                          name="state_query"
+                          placeholder="/orders/{id}"
+                          autocomplete="off"
+                        />
+                      </div>
+                    </div>
+                    <div class="field" style="margin-top: 15px">
+                      <label for="timestamp-tolerance"
+                        >타임스탬프 허용 시간 <small>초</small></label
+                      ><input
+                        type="number"
+                        id="timestamp-tolerance"
+                        name="timestamp_tolerance"
+                        value="300"
+                        min="1"
+                        max="86400"
+                        required
+                      />
+                      <p class="field-note">
+                        대상 서버가 실제로 허용하는 시간을 입력하세요.
+                      </p>
+                    </div>
+                    <label class="check-field"
+                      ><input
+                        type="checkbox"
+                        id="strict-json"
+                        name="strict_json"
+                        value="true"
+                      /><span
+                        >JSON 객체만 허용하는 서버<small
+                          >대상 서버의 입력 정책이 명확한 경우에만
+                          선택하세요.</small
+                        ></span
+                      ></label
+                    >
+                  </div>
+                </details>
+              </div>
+              <div class="form-footer">
+                <p id="form-note">
+                  동적 시험은 주문 생성 등 상태 변경을 일으킬 수 있습니다.
+                  자신의 테스트 서버에서 실행하세요.
+                </p>
+                <button
+                  type="submit"
+                  class="button primary"
+                  id="submit-btn"
+                  disabled
+                >
+                  분석 시작 <svg class="icon"><use href="#i-arrow" /></svg>
+                </button>
+              </div>
+            </form>
+            <aside class="setup-side" aria-label="분석 안내">
+              <div class="card side-card">
+                <h3>하나의 흐름으로 확인</h3>
+                <div class="process-step">
+                  <span class="process-icon"
+                    ><svg class="icon"><use href="#i-code" /></svg
+                  ></span>
+                  <div>
+                    <b>코드에서 위험 징후 탐지</b>
+                    <p>AST를 읽고 5개 정적 규칙을 점검합니다.</p>
+                  </div>
+                </div>
+                <div class="process-step">
+                  <span class="process-icon"
+                    ><svg class="icon"><use href="#i-bolt" /></svg
+                  ></span>
+                  <div>
+                    <b>요청으로 실제 동작 확인</b>
+                    <p>정상 요청 기준을 확인하고 3종 시험을 수행합니다.</p>
+                  </div>
+                </div>
+                <div class="process-step">
+                  <span class="process-icon"
+                    ><svg class="icon"><use href="#i-file" /></svg
+                  ></span>
+                  <div>
+                    <b>근거와 수정 방향 검토</b>
+                    <p>코드 위치, 시험 결과, 수정 예제를 함께 제공합니다.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="card side-card">
+                <h3>지원 범위</h3>
+                <div class="scope-line">
+                  <span>언어</span><strong>Python</strong>
+                </div>
+                <div class="scope-line">
+                  <span>코드 입력</span><strong>.py / .zip</strong>
+                </div>
+                <div class="scope-line">
+                  <span>점검 항목</span><strong>SAST 5 · DAST 3</strong>
+                </div>
+                <div class="platform-chips">
+                  <span>GitHub</span><span>Stripe</span><span>Slack</span
+                  ><span>토스페이먼츠</span><span>PortOne V2</span>
+                </div>
+                <button
+                  class="help-link"
+                  type="button"
+                  data-dialog="scope-dialog"
+                >
+                  적용 범위 자세히 보기
+                  <svg class="icon" style="width: 13px">
+                    <use href="#i-arrow" />
+                  </svg>
+                </button>
+              </div>
+              <div class="side-card" style="padding-top: 0">
+                <p class="field-note">
+                  처음 실행하나요?<br />분석 서버와 웹훅 수신 서버를 각각 실행한
+                  뒤 시작하세요.
+                </p>
+                <button
+                  class="help-link"
+                  type="button"
+                  data-dialog="guide-dialog"
+                >
+                  로컬 실행 가이드
+                  <svg class="icon" style="width: 13px">
+                    <use href="#i-arrow" />
+                  </svg>
+                </button>
+              </div>
+            </aside>
           </div>
-          <div class="btn-row">
-            <button type="submit" class="btn-analyze" id="submit-btn">
-              <span>🔍</span> 보안 분석 시작
-            </button>
-            <button
-              type="button"
-              class="btn-print"
-              id="print-btn"
-              onclick="window.print()"
+          <div class="info-strip" id="preset-notice" hidden>
+            <svg class="icon"><use href="#i-info" /></svg
+            ><span
+              ><b>쇼핑몰 시연 설정을 불러왔습니다.</b>
+              <code>samples/shop_server.py</code>를 선택하고, 수신 서버를 8000번
+              포트에서 실행하세요. 이 예제는 모의 HMAC 서비스입니다.</span
             >
-              🖨️ PDF 저장
-            </button>
           </div>
-        </form>
-      </div>
-
-      <div id="loading" class="card">
-        <div class="spinner"></div>
-        <div>
-          <p style="font-size: 14px; font-weight: 600; margin-bottom: 6px">
-            분석 중...
+        </section>
+        <section
+          id="loading"
+          class="card loading-card"
+          aria-live="polite"
+          hidden
+        >
+          <div class="spinner" aria-hidden="true"></div>
+          <h2>수신 코드를 분석하고 있어요</h2>
+          <p class="subtitle">
+            결과가 준비되면 코드와 시험 근거를 함께 보여드립니다.
           </p>
-          <div style="font-size: 12px; color: var(--muted); line-height: 2">
-            ⏳ 파일 업로드 및 파싱 중<br />🔎 정적 분석 (SAST) 실행 중<br />🌐
-            동적 분석 (DAST) 실행 중<br />📊 리포트 생성 중
+          <p class="field-note" id="loading-time" style="margin-top: 13px">
+            경과 시간 0초
+          </p>
+          <div class="loading-meta">
+            <span>코드 구조</span><span>정적 규칙</span
+            ><span id="loading-dast">동적 시험</span>
           </div>
-        </div>
-      </div>
-
-      <div id="results"></div>
+        </section>
+        <div id="error-region" role="alert" hidden></div>
+        <section id="results-view" aria-label="분석 결과" hidden>
+          <div id="results"></div>
+        </section>
+        <div id="print-report" class="print-report"></div>
+        <footer class="footer">
+          <span>HookLens · 수신 코드 보안 점검 워크스페이스</span
+          ><span>Python &nbsp; / &nbsp; SAST 5개 규칙 · DAST 3개 시나리오</span>
+        </footer>
+      </main>
     </div>
-
+    <dialog class="dialog" id="scope-dialog">
+      <div class="dialog-heading">
+        <h2>점검 범위</h2>
+        <button class="icon-button" data-close-dialog aria-label="닫기">
+          <svg class="icon"><use href="#i-close" /></svg>
+        </button>
+      </div>
+      <p>
+        Python 웹훅 핸들러의 지원 패턴을 점검합니다. 탐지되지 않았다는 결과가
+        전체 코드의 안전을 보증하지는 않습니다.
+      </p>
+      <h3>정적 분석 · 5개 규칙</h3>
+      <table>
+        <tbody>
+          <tr>
+            <td>WHSEC-001</td>
+            <td>서명 검증 및 실패 거부 패턴 확인</td>
+          </tr>
+          <tr>
+            <td>WHSEC-002</td>
+            <td>서명의 일반 비교 사용</td>
+          </tr>
+          <tr>
+            <td>WHSEC-003</td>
+            <td>레거시 HMAC 알고리즘 사용</td>
+          </tr>
+          <tr>
+            <td>WHSEC-004</td>
+            <td>시간값의 만료 검증 누락</td>
+          </tr>
+          <tr>
+            <td>WHSEC-005</td>
+            <td>외부 검증 함수 내부 결함</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>동적 분석 · 3개 시나리오</h3>
+      <p>
+        다운그레이드·서명 정책 / 재전송 / 타입 혼동·입력 정책을 시험합니다.
+        플랫폼에 따라 적용 가능한 시험이 다릅니다. 타입 시험의 수락만으로 인증
+        우회를 의미하지 않습니다.
+      </p>
+      <h3>관측 수준</h3>
+      <p>
+        Tier 1은 상태 조회를 통한 전후 비교, Tier 2는 HTTP 응답 기반 관측입니다.
+        정상 기준 요청이 실패하거나 처리 증거가 부족하면 취약을 확정하지
+        않습니다.
+      </p>
+      <h3>플랫폼 범위</h3>
+      <p>
+        GitHub·Stripe·Slack·토스페이먼츠·PortOne V2의 지원 서명 형식을
+        사용합니다. 토스 서명 시험은 지급대행·셀러 이벤트 범위이며, 실제 이벤트
+        스키마와 업무 연동은 대상에 맞춰야 합니다.
+      </p>
+    </dialog>
+    <dialog class="dialog" id="guide-dialog">
+      <div class="dialog-heading">
+        <h2>로컬 실행 가이드</h2>
+        <button class="icon-button" data-close-dialog aria-label="닫기">
+          <svg class="icon"><use href="#i-close" /></svg>
+        </button>
+      </div>
+      <p><code>app.py</code>가 있는 프로젝트 폴더에서 시작하세요.</p>
+      <h3>1. 의존성 설치</h3>
+      <pre class="code-block">pip install -r requirements.txt</pre>
+      <h3>2. 웹훅 수신 서버 실행</h3>
+      <pre class="code-block">uvicorn samples.shop_server:app --port 8000</pre>
+      <h3>3. 다른 터미널에서 분석 서버 실행</h3>
+      <pre class="code-block">uvicorn app:app --port 8001</pre>
+      <p style="margin-top: 12px">
+        브라우저에서 <code>http://127.0.0.1:8001</code>을 열고 ‘시연 설정’을
+        누르세요. 이후 <code>samples/shop_server.py</code>를 선택하면 됩니다.
+      </p>
+      <h3>정적 분석만 사용</h3>
+      <p>
+        ‘정적 분석만’을 선택하면 수신 서버와 시크릿 없이 코드 검사를 진행할 수
+        있습니다.
+      </p>
+    </dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
     <script>
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      const ui = {
+        report: null,
+        endpoint: 0,
+        tab: "overview",
+        query: "",
+        filter: "all",
+        busy: false,
+        timer: null,
+        toastTimer: null,
+        copies: [],
+      };
       const RULE_DOCS = {
         "WHSEC-001": {
-          title: "OWASP 인증 체크리스트",
-          url: "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+          title: "GitHub · 웹훅 서명 검증",
+          url: "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries",
         },
         "WHSEC-002": {
-          title: "Python hmac.compare_digest 공식 문서",
+          title: "Python · hmac.compare_digest",
           url: "https://docs.python.org/3/library/hmac.html#hmac.compare_digest",
         },
         "WHSEC-003": {
-          title: "NIST 해시 알고리즘 가이드라인",
-          url: "https://csrc.nist.gov/projects/hash-functions",
+          title: "RFC 6151 · MD5 및 HMAC-MD5 보안 고려사항",
+          url: "https://www.rfc-editor.org/rfc/rfc6151",
         },
         "WHSEC-004": {
-          title: "OWASP — 재전송 공격 방어 (타임스탬프 검증)",
-          url: "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+          title: "Stripe · 웹훅 재전송 방어",
+          url: "https://docs.stripe.com/webhooks",
         },
         "WHSEC-005": {
-          title: "CWE-330 — 불충분한 검증 우회",
-          url: "https://cwe.mitre.org/data/definitions/330.html",
+          title: "Python · hmac.compare_digest",
+          url: "https://docs.python.org/3/library/hmac.html#hmac.compare_digest",
         },
       };
-
-      // WHSEC-004는 플랫폼마다 타임스탬프 검증 방식이 다르므로 감지된 플랫폼에 맞는 문서로 교체
-      const WHSEC004_PLATFORM_DOCS = {
-        토스페이먼츠: {
-          title: "토스페이먼츠 — 웹훅 보안 가이드",
-          url: "https://docs.tosspayments.com/guides/v2/webhook",
-        },
-        Stripe: {
-          title: "Stripe — 재전송 공격 방어 (타임스탬프 허용 오차)",
-          url: "https://stripe.com/docs/webhooks/signatures#replay-attacks",
-        },
+      const PLATFORM_DOCS = {
         GitHub: {
-          title: "GitHub — 웹훅 서명 검증 가이드",
+          title: "GitHub · 웹훅 서명 검증",
           url: "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries",
         },
+        Stripe: {
+          title: "Stripe · 웹훅 수신",
+          url: "https://docs.stripe.com/webhooks",
+        },
         Slack: {
-          title: "Slack — 요청 서명 검증 가이드",
-          url: "https://api.slack.com/authentication/verifying-requests-from-slack",
+          title: "Slack · 요청 서명 검증",
+          url: "https://docs.slack.dev/authentication/verifying-requests-from-slack/",
+        },
+        토스페이먼츠: {
+          title: "토스페이먼츠 · 웹훅 이벤트",
+          url: "https://docs.tosspayments.com/reference/using-api/webhook-events",
         },
         "PortOne V2": {
-          title: "PortOne V2 — 웹훅 보안 가이드",
-          url: "https://developers.portone.io/docs/ko/v2-payment/webhook",
+          title: "PortOne V2 · 웹훅 검증",
+          url: "https://developers.portone.io/opi/ko/integration/webhook/readme-v2",
         },
       };
-
-      // renderReport() 호출 시 감지된 플랫폼을 저장하는 모듈 변수
-      let _detectedPlatform = "";
-
-      // 드롭존
-      const dropzone = document.getElementById("dropzone");
-      const fileInput = document.getElementById("code-file");
-      const fileNameText = document.getElementById("file-name-text");
-
-      function setFile(f) {
-        if (!f) return;
-        dropzone.classList.add("has-file");
-        fileNameText.textContent = `${f.name} (${(f.size / 1024).toFixed(1)} KB)`;
-      }
-      fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
-      dropzone.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        dropzone.classList.add("drag-over");
-      });
-      dropzone.addEventListener("dragleave", () =>
-        dropzone.classList.remove("drag-over"),
-      );
-      dropzone.addEventListener("drop", (e) => {
-        e.preventDefault();
-        dropzone.classList.remove("drag-over");
-        const f = e.dataTransfer.files[0];
-        if (f) {
-          const dt = new DataTransfer();
-          dt.items.add(f);
-          fileInput.files = dt.files;
-          setFile(f);
-        }
-      });
-
-      // 폼 제출
-      document
-        .getElementById("analyze-form")
-        .addEventListener("submit", async (e) => {
-          e.preventDefault();
-          const submitBtn = document.getElementById("submit-btn");
-          const printBtn = document.getElementById("print-btn");
-          const loading = document.getElementById("loading");
-          const results = document.getElementById("results");
-          const urlInput = document.getElementById("webhook-url");
-          const urlError = document.getElementById("url-error");
-
-          // 웹훅 URL 유효성 검사
-          if (!urlInput.value.trim()) {
-            urlInput.classList.add("input-error");
-            urlError.classList.add("visible");
-            urlInput.focus();
-            return;
-          }
-          urlInput.classList.remove("input-error");
-          urlError.classList.remove("visible");
-
-          submitBtn.disabled = true;
-          printBtn.classList.remove("visible");
-          loading.style.display = "flex";
-          results.style.display = "none";
-          results.innerHTML = "";
-
-          const formData = new FormData(e.target);
-
-          try {
-            const resp = await fetch("/analyze", {
-              method: "POST",
-              body: formData,
-            });
-            const data = await resp.json();
-            loading.style.display = "none";
-            results.style.display = "block";
-            results.innerHTML = resp.ok
-              ? renderReport(data)
-              : renderError(data.detail || JSON.stringify(data));
-            if (resp.ok) {
-              attachInteractivity();
-              printBtn.classList.add("visible");
-            }
-          } catch (err) {
-            loading.style.display = "none";
-            results.style.display = "block";
-            results.innerHTML = renderError(`네트워크 오류: ${err.message}`);
-          } finally {
-            submitBtn.disabled = false;
-          }
-        });
-
-      // URL 입력 시 에러 상태 해제
-      document
-        .getElementById("webhook-url")
-        .addEventListener("input", function () {
-          if (this.value.trim()) {
-            this.classList.remove("input-error");
-            document.getElementById("url-error").classList.remove("visible");
-          }
-        });
-
-      // 유틸
-      function escHtml(s) {
-        return s == null
+      const STATUS_LABELS = {
+        vulnerable: "정책 위반 처리 확인",
+        rejected: "시험 요청 거부",
+        observed: "수락 관측",
+        inconclusive: "판단 불가",
+        skipped: "생략",
+      };
+      const ATTACK_LABELS = {
+        downgrade: "다운그레이드·서명 정책",
+        replay: "재전송",
+        type_confusion: "타입 혼동·입력 정책",
+      };
+      function escHtml(value) {
+        return value == null
           ? ""
-          : String(s)
+          : String(value)
               .replace(/&/g, "&amp;")
               .replace(/</g, "&lt;")
               .replace(/>/g, "&gt;")
-              .replace(/"/g, "&quot;");
+              .replace(/"/g, "&quot;")
+              .replace(/'/g, "&#39;");
       }
-      function renderError(msg) {
-        return `<div class="error-box"><strong>분석 오류</strong>${escHtml(msg)}</div>`;
+      function icon(name) {
+        return `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+      }
+      function safeUrl(value) {
+        try {
+          const u = new URL(value);
+          return ["https:", "http:"].includes(u.protocol) ? u.href : "";
+        } catch {
+          return "";
+        }
+      }
+      function docLink(doc) {
+        const href = safeUrl(doc?.url);
+        return href
+          ? `<a href="${escHtml(href)}" target="_blank" rel="noopener noreferrer">${escHtml(doc.title || "공식 참고 문서")} ↗</a>`
+          : "";
+      }
+      function number(value) {
+        const n = Number(value);
+        return Number.isFinite(n) && n >= 0 ? n : 0;
       }
       function gradeClass(g) {
-        return g.startsWith("F")
-          ? "grade-F"
-          : g.startsWith("D")
-            ? "grade-D"
-            : g.startsWith("C")
-              ? "grade-C"
-              : "grade-A";
+        g = String(g || "");
+        return g.startsWith("N/A")
+          ? "grade-unknown"
+          : {
+              F: "grade-F",
+              D: "grade-D",
+              C: "grade-C",
+              B: "grade-C",
+              A: "grade-A",
+            }[g[0]] || "grade-unknown";
       }
-      function platformBadgeClass(name) {
+      function severity(value) {
+        return ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"].includes(value)
+          ? value
+          : "INFO";
+      }
+      function severityBadge(value) {
+        const sev = severity(value);
+        return `<span class="severity ${sev}"><span class="dot ${sev}"></span>${sev}</span>`;
+      }
+      function attackStatus(a) {
+        return Object.hasOwn(STATUS_LABELS, a.status)
+          ? a.status
+          : a.vulnerable
+            ? "vulnerable"
+            : "inconclusive";
+      }
+      function stateLabel(s) {
+        s = Object.hasOwn(STATUS_LABELS, s) ? s : "inconclusive";
+        return `<span class="state-label ${s}">${icon(s === "vulnerable" ? "alert" : s === "rejected" ? "check" : s === "observed" ? "eye" : "info")}${STATUS_LABELS[s]}</span>`;
+      }
+      function emptyState(title, description = "", symbol = "info") {
+        return `<div class="empty-state">${icon(symbol)}${escHtml(title)}${description ? `<p>${escHtml(description)}</p>` : ""}</div>`;
+      }
+      function renderError(message) {
+        return `<div class="error-box"><strong>분석을 완료하지 못했습니다</strong><p>${escHtml(message)}</p><p style="margin-top:7px">입력값과 서버 실행 상태를 확인한 뒤 다시 시도하세요.</p></div>`;
+      }
+      function setView(view) {
+        $("setup-view").hidden = view !== "setup";
+        $("results-view").hidden = view !== "results";
+        $("loading").hidden = view !== "loading";
+        $("nav-new").classList.toggle("active", view === "setup");
+        $("nav-results").classList.toggle("active", view === "results");
+        $("breadcrumb-current").textContent =
+          view === "results"
+            ? "분석 결과"
+            : view === "loading"
+              ? "분석 중"
+              : "새 분석";
+        window.scrollTo(0, 0);
+      }
+      function toast(message) {
+        $("toast").textContent = message;
+        $("toast").hidden = false;
+        clearTimeout(ui.toastTimer);
+        ui.toastTimer = setTimeout(() => ($("toast").hidden = true), 2800);
+      }
+      function isStatic() {
         return (
-          {
-            GitHub: "badge-github",
-            Stripe: "badge-stripe",
-            토스페이먼츠: "badge-toss",
-            Slack: "badge-slack",
-            "PortOne V2": "badge-portone",
-          }[name] || "badge-generic"
+          document.querySelector('input[name="sast_only"]:checked').value ===
+          "true"
         );
       }
-      function tierBadge(tier) {
-        const cls =
-          { "Tier 1": "badge-tier1", "Tier 2": "badge-tier2" }[tier] ||
-          "badge-tier2";
-        const hint =
-          { "Tier 1": "상태 교차 검증", "Tier 2": "상태 코드만" }[tier] || "";
-        return `<span class="badge ${cls}">${tier} — ${hint}</span>`;
+      function syncMode() {
+        const only = isStatic();
+        $("dynamic-fields").hidden = only;
+        for (const input of $("dynamic-fields").querySelectorAll("input"))
+          input.disabled = only;
+        $("webhook-url").required = !only;
+        $("form-note").textContent = only
+          ? "소스 코드를 실행하지 않고 AST와 지원 규칙으로 분석합니다."
+          : "동적 시험은 주문 생성 등 상태 변경을 일으킬 수 있습니다. 자신의 테스트 서버에서 실행하세요.";
       }
-
-      // 렌더링
+      function setFile(file) {
+        if (!file) return false;
+        let message = "";
+        if (!/\.(py|zip)$/i.test(file.name))
+          message = ".py 또는 .zip 파일을 선택하세요.";
+        else if (file.size > 10 * 1024 * 1024)
+          message = "파일 크기는 10 MiB 이하여야 합니다.";
+        else if (file.size === 0)
+          message = "비어 있는 파일은 분석할 수 없습니다.";
+        if (message) {
+          $("code-file").value = "";
+          $("file-name-display").hidden = true;
+          $("dropzone").classList.remove("has-file");
+          $("drop-title").innerHTML =
+            "<span>파일 선택</span> 또는 여기에 끌어다 놓기";
+          $("submit-btn").disabled = true;
+          toast(message);
+          return false;
+        }
+        $("dropzone").classList.add("has-file");
+        $("drop-title").textContent = file.name;
+        $("file-name-display").textContent =
+          `${(file.size / 1024).toFixed(1)} KB · 다른 파일을 선택하려면 클릭하세요`;
+        $("file-name-display").hidden = false;
+        $("submit-btn").disabled = false;
+        return true;
+      }
+      function endpointRisk(ep) {
+        return (
+          (ep.sast_findings || []).some((f) => f.severity !== "INFO") ||
+          (ep.dast_results || []).some((a) => attackStatus(a) === "vulnerable")
+        );
+      }
+      function endpointMatches(ep) {
+        const query = ui.query.toLocaleLowerCase();
+        if (
+          query &&
+          !`${ep.path} ${ep.platform?.platform || ""}`
+            .toLocaleLowerCase()
+            .includes(query)
+        )
+          return false;
+        if (ui.filter === "risk") return endpointRisk(ep);
+        if (ui.filter === "confirmed")
+          return (ep.dast_results || []).some(
+            (a) => attackStatus(a) === "vulnerable",
+          );
+        if (ui.filter === "partial") return ep.analysis_status === "partial";
+        return true;
+      }
       function renderReport(data) {
-        // 플랫폼 감지 결과를 모듈 변수에 저장 → renderSAST에서 WHSEC-004 참고 문서 분기에 사용
-        _detectedPlatform = data.platform?.platform || "";
-        const gc = gradeClass(data.overall_grade || "?");
-        const gradeChar = (data.overall_grade || "?")[0];
-        let html = `<div class="print-header">Webhook Security Analyzer — 분석 리포트</div>`;
-
-        html += `
-  <div class="grade-banner ${gc}">
-    <div style="display:flex;align-items:center;gap:18px">
-      <div class="grade-score">${gradeChar}</div>
-      <div class="grade-details">
-        <h2>${escHtml(data.overall_grade)}</h2>
-        <p>대상: ${escHtml(data.target_file)}${data.dast_ran ? "" : " · SAST only"}</p>
-        <p>분석 시간: ${data.elapsed_sec}초</p>
-      </div>
-    </div>
-    <div class="grade-stats">
-      <div class="grade-stat sast"><div class="num">${data.total_sast_findings}</div><div class="lbl">SAST 탐지</div></div>
-      <div class="grade-stat dast"><div class="num">${data.total_dast_vulns}</div><div class="lbl">DAST 취약점</div></div>
-    </div>
-  </div>`;
-
-        if (data.platform?.platform) {
-          const p = data.platform,
-            cls = platformBadgeClass(p.platform);
-          html += `<div class="platform-row">
-      <span class="badge ${cls}">${escHtml(p.platform)}</span>
-      <span class="badge ${cls}">${escHtml(p.sig_header)}</span>
-      <span class="badge badge-generic">알고리즘: ${escHtml(p.algo || "sha256")}</span>
-    </div>`;
-        }
-        if (data.platform_doc?.url) {
-          html += `<div class="doc-link-banner">📖 <span>플랫폼 공식 보안 가이드:</span>
-      <a href="${escHtml(data.platform_doc.url)}" target="_blank" rel="noopener">${escHtml(data.platform_doc.title)} ↗</a>
-    </div>`;
-        }
-        if (data.has_router_split) {
-          html += `<div class="warn-box"><strong>⚠ 라우터 분리 패턴 감지 (include_router / register_blueprint)</strong>핸들러가 여러 파일에 분산되어 있을 수 있습니다. zip으로 전체 프로젝트를 업로드하면 모든 파일을 분석합니다.</div>`;
-        }
-        if (data.dast_warnings?.length) {
-          html += `<div class="warn-box"><strong>⚠ DAST 연결 오류</strong>${data.dast_warnings.map(escHtml).join("<br>")}</div>`;
-        }
-        if (data.warning) {
-          html += `<div class="warn-box"><strong>⚠ 주의</strong>${escHtml(data.warning)}</div>`;
-        }
-        if (!data.endpoints?.length) {
-          html += `<div class="card"><div class="empty-state"><span>🔍</span>분석된 엔드포인트가 없습니다.</div></div>`;
-        } else {
-          data.endpoints.forEach((ep, i) => {
-            html += renderEndpoint(ep, i);
-          });
-        }
-        if (data.files_analyzed?.length) {
-          html += `<div class="meta-row"><strong>분석 파일:</strong> ${data.files_analyzed.map(escHtml).join(", ")}</div>`;
-        }
-        return html;
-      }
-
-      function renderEndpoint(ep, idx) {
-        const sev = ep.overall_severity;
-        const cvss = ep.overall_cvss
-          ? `CVSS ${ep.overall_cvss.toFixed(1)}`
-          : "";
-        const sastCnt = ep.sast_findings.length;
-        const dastVuln = (ep.dast_results || []).filter(
-          (a) => a.vulnerable,
-        ).length;
-
+        const endpoints = data.endpoints || [];
+        const g = data.overall_grade || "N/A — 추가 확인 필요";
+        const grade = g.startsWith("N/A") ? "N/A" : g[0];
+        const unknown = number(data.total_dast_inconclusive);
+        const skipped = number(data.total_dast_skipped);
+        const observed = number(data.total_dast_observations);
+        const warnings = [
+          ...(data.analysis_warnings || []),
+          ...(data.dast_warnings || []),
+          ...(data.warning ? [data.warning] : []),
+        ];
+        const mode = data.dast_ran ? "정적 + 동적 분석" : "정적 분석";
+        const phase =
+          data.analysis_status === "partial"
+            ? "일부 항목 추가 확인"
+            : !data.dast_ran
+              ? "정적 분석 완료"
+              : "분석 완료";
         return `
-  <div class="endpoint-card" id="ep-${idx}">
-    <div class="endpoint-header" onclick="toggleEndpoint('ep-${idx}')">
-      <div class="sev-dot ${sev}"></div>
-      <div class="endpoint-path">${escHtml(ep.path)}</div>
-      <div class="endpoint-meta">
-        ${tierBadge(ep.tier)}
-        <span class="sev-badge ${sev}">${sev}</span>
-        ${cvss ? `<span class="cvss-score">${cvss}</span>` : ""}
-        ${sastCnt > 0 ? `<span style="font-size:11px;color:var(--high)">SAST ${sastCnt}</span>` : ""}
-        ${dastVuln > 0 ? `<span style="font-size:11px;color:var(--critical)">DAST ${dastVuln}</span>` : ""}
-      </div>
-      <span class="chevron">▶</span>
-    </div>
-    <div class="endpoint-body">
-      <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab(this,'sast-${idx}')">정적 분석 (SAST)${sastCnt > 0 ? ` <span style="color:var(--high)">${sastCnt}</span>` : ""}</button>
-        <button class="tab-btn"        onclick="switchTab(this,'dast-${idx}')">동적 분석 (DAST)${dastVuln > 0 ? ` <span style="color:var(--critical)">${dastVuln}</span>` : ""}</button>
-      </div>
-      <div class="tab-content active" id="sast-${idx}">${renderSAST(ep.sast_findings, idx)}</div>
-      <div class="tab-content"        id="dast-${idx}">${renderDAST(ep.dast_results || [], ep.dast_confidence, ep.combined_note)}</div>
-    </div>
-  </div>`;
+<div class="report-top"><div><div class="eyebrow">ANALYSIS REPORT</div><h1>${escHtml(data.target_file || "분석 결과")}</h1><div class="report-meta"><span class="pill blue">${mode}</span><span class="pill ${data.analysis_status === "partial" ? "amber" : ""}">${phase}</span><span>${icon("clock")} ${number(data.elapsed_sec).toFixed(2)}초</span></div></div><div class="heading-actions"><button class="button" data-action="new">${icon("upload")}새 분석</button><button class="button" data-action="export">${icon("download")}JSON</button><button class="button" data-action="print">${icon("print")}인쇄</button></div></div>
+${warnings.length ? `<div class="notice"><strong>분석 범위 확인</strong>${warnings.map(escHtml).join("<br>")}</div>` : ""}
+<div class="summary-grid"><div class="metric ${gradeClass(g)}"><div class="metric-label">${icon("shield")}종합 등급</div><div class="metric-value">${escHtml(grade)}</div><div class="metric-sub">${escHtml(g.replace(/^(N\/A|[A-F])\s*[—–-]?\s*/, ""))}</div></div><div class="metric"><div class="metric-label">${icon("code")}정적 위험 징후</div><div class="metric-value">${number(data.total_sast_findings)}<small style="font-size:12px;font-weight:400;margin-left:5px">건</small></div><div class="metric-sub">5개 규칙 · 코드 검토 대상</div></div><div class="metric"><div class="metric-label">${icon("bolt")}동적 처리 증거</div><div class="metric-value">${number(data.total_dast_vulns)}<small style="font-size:12px;font-weight:400;margin-left:5px">건</small></div><div class="metric-sub">${data.dast_ran ? "정책 위반과 상태 변경 확인" : "동적 시험 미실행"}</div></div><div class="metric"><div class="metric-label">${icon("info")}추가 확인</div><div class="metric-value">${unknown + observed}<small style="font-size:12px;font-weight:400;margin-left:5px">건</small></div><div class="metric-sub">관측 ${observed} · 판단 불가 ${unknown} · 생략 ${skipped}</div></div></div>
+<div class="analysis-scope">${icon("info")}<span>등급은 지원하는 점검 범위의 결과입니다. 시험 요청의 수락과 실제 처리 증거를 구분하며, 전체 코드의 안전을 보증하지 않습니다.</span></div>
+${endpoints.length ? `<div class="workbench"><aside class="card endpoint-list" aria-label="엔드포인트 목록"><div class="list-title"><h2>엔드포인트</h2><span class="pill">${endpoints.length}</span></div><div class="list-controls"><input class="search-input" id="endpoint-search" type="search" placeholder="경로 또는 플랫폼 검색" aria-label="엔드포인트 검색" value="${escHtml(ui.query)}"/><select class="filter-select" id="endpoint-filter" aria-label="결과 필터"><option value="all">모든 결과</option><option value="risk">위험 징후 있음</option><option value="confirmed">동적 처리 증거</option><option value="partial">추가 확인 필요</option></select></div><div class="endpoint-items" id="endpoint-items">${renderEndpointList(data)}</div></aside><section class="card endpoint-detail" id="endpoint-detail" aria-label="엔드포인트 상세">${renderEndpoint(endpoints[ui.endpoint], ui.endpoint)}</section></div>` : emptyState("분석된 엔드포인트가 없습니다", "지원하는 웹훅 경로·헤더 패턴을 포함한 소스인지 확인하세요.", "code")}
+${data.files_analyzed?.length ? `<div class="file-list">분석 파일 · ${data.files_analyzed.map(escHtml).join(" · ")}</div>` : ""}`;
       }
-
-      function renderSAST(findings, epIdx) {
+      function renderEndpointList(data) {
+        return (
+          (data.endpoints || [])
+            .map((ep, i) => {
+              if (!endpointMatches(ep)) return "";
+              const risk = (ep.sast_findings || []).filter(
+                (f) => f.severity !== "INFO",
+              ).length;
+              const confirmed = (ep.dast_results || []).filter(
+                (a) => attackStatus(a) === "vulnerable",
+              ).length;
+              return `<button class="endpoint-button ${i === ui.endpoint ? "active" : ""}" data-endpoint="${i}" aria-pressed="${i === ui.endpoint}"><span class="path">${escHtml(ep.path || "/")}</span><span class="counts"><span class="dot ${severity(ep.overall_severity)}"></span>${escHtml(ep.platform?.platform || "일반 HMAC")}<span>정적 ${risk} · 동적 ${confirmed}</span>${ep.analysis_status === "partial" ? "<span>추가 확인</span>" : ""}</span></button>`;
+            })
+            .join("") || emptyState("일치하는 엔드포인트 없음")
+        );
+      }
+      function renderEndpoint(ep, index) {
+        if (!ep) return emptyState("엔드포인트를 선택하세요");
+        const findings = ep.sast_findings || [];
+        const attacks = ep.dast_results || [];
+        const tier = attacks.length
+          ? ep.tier === "Tier 1"
+            ? "Tier 1 · 상태 교차 검증"
+            : "Tier 2 · HTTP 관측"
+          : "동적 시험 미실행";
+        return `<div class="detail-heading"><h2 class="endpoint-title">${escHtml(ep.path)}</h2><div class="detail-meta">${severityBadge(ep.overall_severity)}<span class="pill">${escHtml(ep.platform?.platform || "일반 HMAC")}</span><span class="pill">${tier}</span>${ep.overall_cvss ? `<span class="pill">참고 위험도 ${number(ep.overall_cvss).toFixed(1)}</span>` : ""}</div></div><div class="tabs" role="tablist" aria-label="분석 상세"><button class="tab-button ${ui.tab === "overview" ? "active" : ""}" role="tab" id="tab-overview" aria-controls="tab-panel" tabindex="${ui.tab === "overview" ? 0 : -1}" aria-selected="${ui.tab === "overview"}" data-tab="overview">분석 요약</button><button class="tab-button ${ui.tab === "sast" ? "active" : ""}" role="tab" id="tab-sast" aria-controls="tab-panel" tabindex="${ui.tab === "sast" ? 0 : -1}" aria-selected="${ui.tab === "sast"}" data-tab="sast">정적 분석 <span class="tab-count">${findings.length}</span></button><button class="tab-button ${ui.tab === "dast" ? "active" : ""}" role="tab" id="tab-dast" aria-controls="tab-panel" tabindex="${ui.tab === "dast" ? 0 : -1}" aria-selected="${ui.tab === "dast"}" data-tab="dast">동적 시험 <span class="tab-count">${attacks.length}</span></button><button class="tab-button ${ui.tab === "fix" ? "active" : ""}" role="tab" id="tab-fix" aria-controls="tab-panel" tabindex="${ui.tab === "fix" ? 0 : -1}" aria-selected="${ui.tab === "fix"}" data-tab="fix">수정 가이드</button></div><div class="detail-content" id="tab-panel" role="tabpanel" aria-labelledby="tab-${ui.tab}">${ui.tab === "sast" ? renderSAST(findings, index, ep.platform?.platform) : ui.tab === "dast" ? renderDAST(attacks, ep.dast_confidence, ep.combined_note) : ui.tab === "fix" ? renderFixes(findings, index, ep.platform?.platform) : renderOverview(ep)}</div>`;
+      }
+      function renderProbe(probe) {
+        if (!probe)
+          return emptyState(
+            "동적 시험 미실행",
+            "정적 분석 결과를 확인하거나, 서버 URL을 입력해 다시 분석하세요.",
+          );
+        const steps = [
+          ["서명 누락 요청", probe.step1_code],
+          ["잘못된 서명", probe.step2_code],
+          ["정상 서명 기준", probe.step3_code],
+          ["상태 조회", probe.step4_state_ok ? "확인" : "미확인"],
+        ];
+        return `${probe.validation_error ? `<div class="notice">${escHtml(probe.validation_error)}</div>` : ""}<div class="probe-grid">${steps.map(([title, value], i) => `<div class="probe-step"><span class="number">STEP 0${i + 1}</span><b>${title}</b><strong class="${i === 2 ? (probe.baseline_valid ? "ok" : "warn") : ""}">${typeof value === "number" ? (value ? "HTTP " + number(value) : "응답 없음") : escHtml(value)}</strong></div>`).join("")}</div><p class="field-note" style="margin-top:10px">정상 기준 요청: ${probe.baseline_valid ? "HTTP 수락 확인" : "성립하지 않음 · 결과 해석에 추가 확인 필요"}</p>`;
+      }
+      function groupStatus(results) {
+        if (results.some((a) => attackStatus(a) === "vulnerable"))
+          return "vulnerable";
+        if (results.some((a) => attackStatus(a) === "inconclusive"))
+          return "inconclusive";
+        if (results.some((a) => attackStatus(a) === "observed"))
+          return "observed";
+        if (results.every((a) => attackStatus(a) === "skipped"))
+          return "skipped";
+        if (results.every((a) => attackStatus(a) === "rejected"))
+          return "rejected";
+        return "inconclusive";
+      }
+      function renderOverview(ep) {
+        const findings = ep.sast_findings || [];
+        const attacks = ep.dast_results || [];
+        const doc = PLATFORM_DOCS[ep.platform?.platform];
+        return `${ep.combined_note ? `<div class="evidence-banner">${icon("shield")}<span>${escHtml(ep.combined_note)}</span></div>` : ""}<div class="overview-section"><div class="section-title"><h3>정상 요청 기준 확인</h3><small>Probe · 4단계</small></div>${renderProbe(ep.probe)}</div><div class="overview-section"><div class="section-title"><h3>코드에서 발견한 항목</h3><button class="link-button" data-tab="sast">정적 분석 보기 →</button></div>${findings.length ? findings.map((f) => `<div class="finding-summary">${severityBadge(f.severity)}<span>${escHtml(f.rule_name || f.rule_id)}</span><small>L${number(f.lineno)}</small></div>`).join("") : emptyState("지원하는 정적 규칙에서 위험 징후 미탐지")}</div><div class="overview-section"><div class="section-title"><h3>동적 시나리오</h3><button class="link-button" data-tab="dast">시험 근거 보기 →</button></div>${
+          attacks.length
+            ? `<div class="mini-results">${Object.entries(ATTACK_LABELS)
+                .map(([type, label]) => {
+                  const group = attacks.filter((a) => a.attack_type === type);
+                  return `<div class="mini-result"><b>${label}</b>${group.length ? stateLabel(groupStatus(group)) : '<span class="muted">미실행</span>'}<p>하위 시험 ${group.length}건</p></div>`;
+                })
+                .join("")}</div>`
+            : emptyState("동적 시험 결과가 없습니다")
+        }</div>${doc ? `<div class="rule-doc" style="margin-top:20px">플랫폼 참고 · ${docLink(doc)}</div>` : ""}`;
+      }
+      function copyButton(text) {
+        const id = ui.copies.push(String(text)) - 1;
+        return `<button type="button" class="button small" data-copy="${id}">${icon("copy")}복사</button>`;
+      }
+      function codePanel(text, title, copy = true) {
+        return `<div class="code-panel"><div class="code-heading"><span>${escHtml(title)}</span>${copy ? copyButton(text) : ""}</div><pre class="code-block">${escHtml(text)}</pre></div>`;
+      }
+      function sourcePanel(f) {
+        const context = f.source_context;
+        if (context?.lines?.length) {
+          const start = number(context.start_line) || 1;
+          return `<div class="code-panel"><div class="code-heading"><span>탐지 위치의 원본 코드</span><span>Python</span></div><pre class="code-block source-code">${context.lines.map((line, i) => `<span class="code-line ${start + i === number(f.lineno) ? "marked" : ""}"><span class="line-no">${start + i}</span>${escHtml(line) || " "}</span>`).join("")}</pre></div>`;
+        }
+        return f.code_snippet
+          ? codePanel(f.code_snippet, "원본 핸들러 일부", false)
+          : '<p class="field-note">표시된 파일과 줄에서 원본 코드를 확인하세요.</p>';
+      }
+      function findingDoc(f, platform) {
+        return f.rule_id === "WHSEC-004" && PLATFORM_DOCS[platform]
+          ? PLATFORM_DOCS[platform]
+          : RULE_DOCS[(f.related_rule_ids || [])[0] || f.rule_id];
+      }
+      function renderSAST(findings, index, platform) {
         if (!findings?.length)
-          return `<div class="empty-state"><span>✅</span>정적 분석 취약점 없음</div>`;
+          return emptyState(
+            "지원하는 정적 점검 범위에서 위험 징후 미탐지",
+            "미지원 코드 구조의 안전까지 확인한 결과는 아닙니다.",
+            "shield",
+          );
         return findings
-          .map((f, i) => {
-            const fid = `f-${epIdx}-${i}`;
-            const fname = f.filepath ? f.filepath.split("/").pop() : "";
-            const docInfo =
-              f.rule_id === "WHSEC-004" &&
-              WHSEC004_PLATFORM_DOCS[_detectedPlatform]
-                ? WHSEC004_PLATFORM_DOCS[_detectedPlatform]
-                : RULE_DOCS[f.rule_id];
-            const docHtml = docInfo
-              ? `<div class="rule-doc-link">📚 참고 문서: <a href="${escHtml(docInfo.url)}" target="_blank" rel="noopener">${escHtml(docInfo.title)} ↗</a></div>`
-              : "";
-            return `
-    <div class="finding" id="${fid}">
-      <div class="finding-header" onclick="toggleFinding('${fid}')">
-        <span class="sev-badge ${f.severity}">${f.severity}</span>
-        <span class="finding-rule">${escHtml(f.rule_id)}</span>
-        <span class="finding-msg">${escHtml(f.message)}</span>
-        ${fname ? `<span class="finding-file" title="${escHtml(f.filepath)}">📄 ${escHtml(fname)}</span>` : ""}
-        <span class="finding-line">L${f.lineno}</span>
-      </div>
-      <div class="finding-body">
-        ${f.recommendation ? `<div class="finding-rec"><strong>수정 방법:</strong> ${escHtml(f.recommendation)}</div>` : ""}
-        ${f.fix_snippet ? `<div class="snippet-label">수정 코드 스니펫</div><pre class="fix-snippet">${escHtml(f.fix_snippet)}</pre>` : ""}
-        ${docHtml}
-        ${f.cvss_score ? `<div style="font-size:11px;color:var(--muted);margin-top:8px">CVSS: ${f.cvss_score}</div>` : ""}
-      </div>
-    </div>`;
-          })
+          .map(
+            (f, i) =>
+              `<details class="finding" ${i === 0 ? "open" : ""}><summary>${severityBadge(f.severity)}<span class="finding-title">${escHtml(f.rule_name || f.rule_id)}</span><span class="rule mono">${escHtml(f.rule_id)}</span>${icon("chevron")}</summary><div class="finding-body"><p class="finding-message">${escHtml(f.message)}</p><div class="source-location mono">${escHtml(
+                f.display_path ||
+                  String(f.filepath || "")
+                    .split(/[\\/]/)
+                    .pop(),
+              )} · L${number(f.lineno)}${f.handler_name ? " · " + escHtml(f.handler_name) + "()" : ""}</div>${sourcePanel(f)}${f.recommendation ? `<div class="recommendation"><strong>수정 방향</strong>${escHtml(f.recommendation)}</div>` : ""}<button class="link-button" data-tab="fix">수정 코드 예제 보기 →</button>${findingDoc(f, platform) ? `<div class="rule-doc">참고 · ${docLink(findingDoc(f, platform))}</div>` : ""}${f.cvss_score ? `<div class="score-note">규칙 참고 위험도 ${number(f.cvss_score).toFixed(1)} · 환경별 CVSS 산출값 아님</div>` : ""}</div></details>`,
+          )
           .join("");
       }
-
-      function renderDAST(results, confidence, combined_note) {
-        const typeLabel = {
-          downgrade: "다운그레이드 공격",
-          replay: "재전송 공격",
-          type_confusion: "타입 혼동 공격",
-        };
-        let html = confidence
-          ? `<div class="dast-confidence">📡 동적 분석 신뢰도: <strong>${escHtml(confidence)}</strong>${combined_note ? " | " + escHtml(combined_note) : ""}</div>`
+      function renderDAST(results, confidence = "", combinedNote = "") {
+        let html = combinedNote
+          ? `<div class="evidence-banner">${icon("info")}<span>${escHtml(combinedNote)}</span></div>`
           : "";
         if (!results?.length)
           return (
             html +
-            `<div class="empty-state"><span>⚪</span>동적 분석 결과 없음 (URL 미입력 또는 서버 미응답)</div>`
+            emptyState(
+              "동적 시험 미실행",
+              "수신 서버 URL과 분석 방식을 확인하세요.",
+            )
           );
-        results.forEach((a) => {
-          html += `
-    <div class="dast-item ${a.vulnerable ? "vuln" : "safe"}">
-      <div class="dast-icon">${a.vulnerable ? "🔴" : "🟢"}</div>
-      <div class="dast-info">
-        <div class="dast-type">${escHtml(typeLabel[a.attack_type] || a.attack_type)}</div>
-        <div class="dast-desc">${escHtml(a.description)}</div>
-        ${a.details?.length ? `<div class="dast-details">${a.details.map(escHtml).join("<br>")}</div>` : ""}
-        ${a.state_changed ? `<div class="state-changed">⚠ 상태 변화 감지 — DB 변경 확인됨 (Tier 1)</div>` : ""}
-      </div>
-      ${a.vulnerable ? `<span class="conf-badge ${a.confidence}">${a.confidence}</span>` : ""}
-    </div>`;
+        html += `<p class="field-note" style="margin-bottom:18px">${escHtml(confidence || "시험 결과의 상태와 처리 증거를 함께 확인하세요.")}<br>하위 시험 건수는 독립적인 취약점 종류의 수와 다릅니다.</p>`;
+        for (const [type, label] of Object.entries(ATTACK_LABELS)) {
+          const group = results.filter((a) => a.attack_type === type);
+          if (!group.length) continue;
+          html += `<div class="dast-group"><h3 class="dast-group-title">${icon("bolt")}${label}<span class="pill">${group.length}</span></h3>${group.map((a) => renderAttack(a)).join("")}</div>`;
+        }
+        const others = results.filter(
+          (a) => !Object.hasOwn(ATTACK_LABELS, a.attack_type),
+        );
+        return html + others.map(renderAttack).join("");
+      }
+      function renderAttack(a) {
+        const status = attackStatus(a);
+        return `<article class="dast-item ${status === "vulnerable" ? "vuln" : status === "rejected" ? "safe" : "pending"}"><div class="dast-item-heading">${stateLabel(status)}<span class="variant">${escHtml(a.variant || a.attack_type)}</span></div><p class="dast-desc">${escHtml(a.description)}</p><div class="dast-tags"><span class="pill mono">${a.status_code ? "HTTP " + number(a.status_code) : "HTTP 응답 미기록"}</span><span class="pill">${escHtml(a.tier || "관측 수준 미기록")}</span>${a.confidence ? `<span class="pill">신뢰도 ${escHtml(a.confidence)}</span>` : ""}</div>${a.state_changed ? `<div class="state-changed">${icon("check")}시험 대상의 상태 조회값 변경 확인</div>` : ""}${a.details?.length ? `<details ${status === "vulnerable" ? "open" : ""}><summary>실행 근거 ${a.details.length}건</summary><div class="dast-details mono">${a.details.map(escHtml).join("<br>")}</div></details>` : ""}</article>`;
+      }
+      function renderFixes(findings, index, platform) {
+        const items = (findings || []).filter(
+          (f) => f.fix_snippet || f.recommendation,
+        );
+        if (!items.length)
+          return emptyState(
+            "제공할 수정 가이드가 없습니다",
+            "탐지 항목과 지원 범위를 함께 확인하세요.",
+            "book",
+          );
+        return (
+          `<div class="evidence-banner">${icon("book")}<span>탐지 규칙에 따른 참고 예제입니다. 플랫폼의 서명 형식과 기존 성공·거부 분기를 확인한 뒤 적용하세요.</span></div>` +
+          items
+            .map(
+              (f) =>
+                `<div class="overview-section"><div class="section-title"><h3>${escHtml(f.rule_name || f.rule_id)}</h3><span class="pill mono">${escHtml(f.rule_id)}</span></div><div class="source-location mono">${escHtml(
+                  f.display_path ||
+                    String(f.filepath || "")
+                      .split(/[\\/]/)
+                      .pop(),
+                )} · L${number(f.lineno)}</div>${f.recommendation ? `<p class="finding-message">${escHtml(f.recommendation)}</p>` : ""}${f.fix_snippet ? codePanel(f.fix_snippet, "수정 참고 코드") : ""}${findingDoc(f, platform) ? `<div class="rule-doc">참고 · ${docLink(findingDoc(f, platform))}</div>` : ""}</div>`,
+            )
+            .join("")
+        );
+      }
+      function updateDetail(focusTab = false) {
+        const ep = ui.report?.endpoints?.[ui.endpoint];
+        ui.copies = [];
+        $("endpoint-detail").innerHTML = renderEndpoint(ep, ui.endpoint);
+        $("endpoint-items").innerHTML = renderEndpointList(ui.report);
+        if (focusTab)
+          document.querySelector(`[role="tab"][data-tab="${ui.tab}"]`)?.focus();
+      }
+      function applyEndpointFilter() {
+        const matches = (ui.report?.endpoints || [])
+          .map((ep, i) => (endpointMatches(ep) ? i : -1))
+          .filter((i) => i >= 0);
+        if (!matches.includes(ui.endpoint)) ui.endpoint = matches[0] ?? -1;
+        $("endpoint-items").innerHTML = renderEndpointList(ui.report);
+        ui.copies = [];
+        $("endpoint-detail").innerHTML =
+          ui.endpoint < 0
+            ? emptyState(
+                "필터에 맞는 결과가 없습니다",
+                "검색어나 결과 필터를 변경하세요.",
+              )
+            : renderEndpoint(ui.report.endpoints[ui.endpoint], ui.endpoint);
+      }
+      function selectTab(tab, focus = false) {
+        if (!["overview", "sast", "dast", "fix"].includes(tab)) return;
+        ui.tab = tab;
+        updateDetail(focus);
+      }
+      async function copyText(text) {
+        if (navigator.clipboard?.writeText) {
+          try {
+            await navigator.clipboard.writeText(text);
+            return true;
+          } catch {}
+        }
+        const field = document.createElement("textarea");
+        field.value = text;
+        field.setAttribute("readonly", "");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        let copied = false;
+        try {
+          copied = document.execCommand("copy");
+        } catch {}
+        field.remove();
+        return copied;
+      }
+      function exportReport() {
+        if (!ui.report) return;
+        const blob = new Blob([JSON.stringify(ui.report, null, 2)], {
+          type: "application/json",
         });
-        return html;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `HookLens-${String(ui.report.target_file || "report").replace(/[^a-zA-Z0-9._-]/g, "_")}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
-
-      // 인터랙션
-      function attachInteractivity() {
-        const f = document.querySelector(".endpoint-card");
-        if (f) f.classList.add("expanded");
+      function buildPrintReport(data) {
+        return `<h1>HookLens · 분석 리포트</h1><p>${escHtml(data.target_file)} · ${escHtml(data.overall_grade)} · ${number(data.elapsed_sec)}초</p><p>정적 위험 징후 ${number(data.total_sast_findings)}건 · 동적 처리 증거 ${number(data.total_dast_vulns)}건</p><p>관측 ${number(data.total_dast_observations)} · 판단 불가 ${number(data.total_dast_inconclusive)} · 생략 ${number(data.total_dast_skipped)}</p><p>지원하는 점검 범위의 결과이며 전체 안전을 보증하지 않습니다. 수치는 규칙 참고 위험도입니다.</p>${[...(data.analysis_warnings || []), ...(data.dast_warnings || []), ...(data.warning ? [data.warning] : [])].map((w) => `<p>${escHtml(w)}</p>`).join("")}${(data.endpoints || []).map((ep, i) => `<h2>${escHtml(ep.path)}</h2><p>${escHtml(ep.platform?.platform || "일반 HMAC")} · ${escHtml(ep.analysis_status)} · ${escHtml(ep.overall_severity)} · 참고 위험도 ${number(ep.overall_cvss).toFixed(1)}</p><h3>정적 분석</h3>${renderSAST(ep.sast_findings || [], i, ep.platform?.platform)}<h3>동적 시험</h3>${renderDAST(ep.dast_results || [], ep.dast_confidence, ep.combined_note)}<h3>수정 가이드</h3>${renderFixes(ep.sast_findings || [], i, ep.platform?.platform)}`).join("")}`;
       }
-      function toggleEndpoint(id) {
-        document.getElementById(id).classList.toggle("expanded");
+      function printReport() {
+        if (!ui.report) return;
+        const savedCopies = ui.copies.slice();
+        $("print-report").innerHTML = buildPrintReport(ui.report);
+        ui.copies = savedCopies;
+        for (const d of $("print-report").querySelectorAll("details"))
+          d.open = true;
+        window.print();
       }
-      function toggleFinding(id) {
-        document.getElementById(id).classList.toggle("open");
+      function errorText(detail) {
+        if (typeof detail === "string") return detail;
+        if (Array.isArray(detail))
+          return detail
+            .map(
+              (item) =>
+                `${(item.loc || []).join(".")} · ${item.msg || "입력값 확인 필요"}`,
+            )
+            .join("\n");
+        return "서버 응답을 처리하지 못했습니다.";
       }
-      function switchTab(btn, contentId) {
-        const body = btn.closest(".endpoint-body");
-        body
-          .querySelectorAll(".tab-btn")
-          .forEach((b) => b.classList.remove("active"));
-        body
-          .querySelectorAll(".tab-content")
-          .forEach((c) => c.classList.remove("active"));
-        btn.classList.add("active");
-        document.getElementById(contentId).classList.add("active");
+      function validateDynamic(form) {
+        if (isStatic()) return "";
+        let url;
+        try {
+          url = new URL(form.get("webhook_url"));
+        } catch {
+          return "올바른 HTTP(S) 수신 서버 URL을 입력하세요.";
+        }
+        if (
+          !["http:", "https:"].includes(url.protocol) ||
+          url.username ||
+          url.password ||
+          url.search ||
+          url.hash
+        )
+          return "수신 서버 URL에는 HTTP(S) 주소를 사용하고 인증정보·쿼리·fragment는 제외하세요.";
+        const create = String(form.get("state_create") || "").trim(),
+          query = String(form.get("state_query") || "").trim();
+        if (Boolean(create) !== Boolean(query))
+          return "상태 생성 경로와 조회 경로를 함께 입력하거나 둘 다 비워주세요.";
+        if (
+          create &&
+          (!create.startsWith("/") ||
+            !query.startsWith("/") ||
+            !query.includes("{id}"))
+        )
+          return "상태 경로는 /로 시작하고, 조회 경로에는 {id}를 포함해야 합니다.";
+        return "";
       }
+      async function submitAnalysis(event) {
+        event.preventDefault();
+        if (ui.busy) return;
+        const file = $("code-file").files[0];
+        if (!file || !setFile(file)) return;
+        const form = new FormData($("analyze-form"));
+        const invalid = validateDynamic(form);
+        if (invalid) {
+          $("error-region").innerHTML = renderError(invalid);
+          $("error-region").hidden = false;
+          return;
+        }
+        ui.busy = true;
+        $("submit-btn").disabled = true;
+        $("nav-new").disabled = true;
+        $("nav-results").disabled = true;
+        $("error-region").hidden = true;
+        $("loading-dast").hidden = isStatic();
+        setView("loading");
+        const started = Date.now();
+        $("loading-time").textContent = "경과 시간 0초";
+        ui.timer = setInterval(
+          () =>
+            ($("loading-time").textContent =
+              `경과 시간 ${Math.floor((Date.now() - started) / 1000)}초`),
+          1000,
+        );
+        try {
+          const response = await fetch("/analyze", {
+            method: "POST",
+            body: form,
+          });
+          let data;
+          try {
+            data = await response.json();
+          } catch {
+            throw new Error(
+              `분석 서버가 JSON 결과를 반환하지 않았습니다. (HTTP ${response.status})`,
+            );
+          }
+          if (!response.ok) throw new Error(errorText(data.detail));
+          ui.report = data;
+          ui.endpoint = 0;
+          ui.tab = "overview";
+          ui.query = "";
+          ui.filter = "all";
+          ui.copies = [];
+          $("results").innerHTML = renderReport(data);
+          $("print-report").innerHTML = "";
+          setView("results");
+        } catch (error) {
+          setView("setup");
+          $("error-region").innerHTML = renderError(
+            error.message || "네트워크 연결을 확인하세요.",
+          );
+          $("error-region").hidden = false;
+        } finally {
+          clearInterval(ui.timer);
+          ui.busy = false;
+          $("submit-btn").disabled = false;
+          $("nav-new").disabled = false;
+          $("nav-results").disabled = !ui.report;
+        }
+      }
+      $("code-file").addEventListener("change", () =>
+        setFile($("code-file").files[0]),
+      );
+      $("code-file").addEventListener(
+        "focus",
+        () => ($("dropzone").style.outline = "3px solid #7396ff"),
+      );
+      $("code-file").addEventListener(
+        "blur",
+        () => ($("dropzone").style.outline = ""),
+      );
+      $("dropzone").addEventListener("dragover", (event) => {
+        event.preventDefault();
+        $("dropzone").classList.add("drag-over");
+      });
+      $("dropzone").addEventListener("dragleave", () =>
+        $("dropzone").classList.remove("drag-over"),
+      );
+      $("dropzone").addEventListener("drop", (event) => {
+        event.preventDefault();
+        $("dropzone").classList.remove("drag-over");
+        const file = event.dataTransfer.files[0];
+        if (!file || !setFile(file)) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        $("code-file").files = transfer.files;
+      });
+      for (const radio of document.querySelectorAll('input[name="sast_only"]'))
+        radio.addEventListener("change", syncMode);
+      $("toggle-secret").addEventListener("click", () => {
+        const visible = $("secret").type === "password";
+        $("secret").type = visible ? "text" : "password";
+        $("toggle-secret").setAttribute(
+          "aria-label",
+          visible ? "시크릿 숨기기" : "시크릿 표시",
+        );
+        $("toggle-secret").setAttribute("aria-pressed", String(visible));
+      });
+      $("demo-preset").addEventListener("click", () => {
+        document.querySelector(
+          'input[name="sast_only"][value="false"]',
+        ).checked = true;
+        syncMode();
+        $("webhook-url").value = "http://127.0.0.1:8000";
+        $("secret").value = "dku-toss-secret-2026";
+        $("secret").type = "password";
+        $("toggle-secret").setAttribute("aria-pressed", "false");
+        $("toggle-secret").setAttribute("aria-label", "시크릿 표시");
+        $("state-create").value = "/orders";
+        $("state-query").value = "/orders/{id}";
+        $("timestamp-tolerance").value = "300";
+        $("strict-json").checked = false;
+        $("advanced-settings").open = true;
+        $("preset-notice").hidden = false;
+        toast("시연 설정을 채웠습니다. shop_server.py를 선택하세요.");
+      });
+      $("analyze-form").addEventListener("submit", submitAnalysis);
+      $("nav-new").addEventListener("click", () => {
+        if (!ui.busy) {
+          setView("setup");
+          $("error-region").hidden = true;
+        }
+      });
+      $("nav-results").addEventListener("click", () => {
+        if (ui.report && !ui.busy) {
+          setView("results");
+          $("error-region").hidden = true;
+        }
+      });
+      for (const button of document.querySelectorAll("[data-dialog]"))
+        button.addEventListener("click", () =>
+          $(button.dataset.dialog).showModal(),
+        );
+      for (const button of document.querySelectorAll("[data-close-dialog]"))
+        button.addEventListener("click", () =>
+          button.closest("dialog").close(),
+        );
+      $("results").addEventListener("input", (event) => {
+        if (event.target.id === "endpoint-search") {
+          ui.query = event.target.value;
+          applyEndpointFilter();
+        }
+      });
+      $("results").addEventListener("change", (event) => {
+        if (event.target.id === "endpoint-filter") {
+          ui.filter = event.target.value;
+          applyEndpointFilter();
+        }
+      });
+      $("results").addEventListener("keydown", (event) => {
+        const tab = event.target.closest('[role="tab"]');
+        if (
+          !tab ||
+          !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+        )
+          return;
+        event.preventDefault();
+        const tabs = ["overview", "sast", "dast", "fix"];
+        const index = tabs.indexOf(tab.dataset.tab);
+        const next =
+          event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? 3
+              : (index + (event.key === "ArrowRight" ? 1 : 3)) % 4;
+        selectTab(tabs[next], true);
+      });
+      $("results").addEventListener("click", async (event) => {
+        const button = event.target.closest("button");
+        if (!button) return;
+        if (button.dataset.endpoint !== undefined) {
+          ui.endpoint = Number(button.dataset.endpoint);
+          updateDetail();
+          return;
+        }
+        if (button.dataset.tab) {
+          selectTab(button.dataset.tab, true);
+          return;
+        }
+        if (button.dataset.copy !== undefined) {
+          const text = ui.copies[Number(button.dataset.copy)];
+          if (text === undefined) return;
+          if (await copyText(text)) toast("참고 코드를 복사했습니다.");
+          else
+            toast(
+              "자동 복사를 사용할 수 없습니다. 코드를 직접 선택해 복사하세요.",
+            );
+          return;
+        }
+        if (button.dataset.action === "new") {
+          $("error-region").hidden = true;
+          setView("setup");
+        }
+        if (button.dataset.action === "export") exportReport();
+        if (button.dataset.action === "print") printReport();
+      });
+      window.addEventListener("beforeprint", () => {
+        if (ui.report && !$("print-report").innerHTML) {
+          const copies = ui.copies.slice();
+          $("print-report").innerHTML = buildPrintReport(ui.report);
+          ui.copies = copies;
+          for (const d of $("print-report").querySelectorAll("details"))
+            d.open = true;
+        }
+      });
+      syncMode();
     </script>
   </body>
 </html>

@@ -51,17 +51,17 @@ async def webhook_no_verify(request: Request):
 @app.post("/webhook/timing-attack")
 async def webhook_timing_attack(
     request: Request,
-    x_hub_signature_256: str = Header(None),
+    x_signature: str = Header(None),
 ):
     payload = await request.body()
 
-    if x_hub_signature_256 is None:
+    if x_signature is None:
         raise HTTPException(status_code=401, detail="Missing signature")
 
     computed = "sha256=" + hmac.new(SECRET, payload, hashlib.sha256).hexdigest()
 
     # hmac.compare_digest 대신 == 사용 → 타이밍 공격 가능
-    if x_hub_signature_256 == computed:
+    if x_signature == computed:
         data = await request.json()
         order_id = data.get("order_id", "unknown")
         _order_db[order_id] = data.get("status", "paid")
@@ -74,17 +74,18 @@ async def webhook_timing_attack(
 @app.post("/webhook/weak-hash-sha1")
 async def webhook_weak_hash_sha1(
     request: Request,
-    x_hub_signature_256: str = Header(None),
+    x_signature: str = Header(None),
 ):
     payload = await request.body()
 
-    if x_hub_signature_256 is None:
+    if x_signature is None:
         raise HTTPException(status_code=401, detail="Missing signature")
 
     # SHA1 은 충돌 공격에 취약 (GitHub 구 버전 방식)
     computed = "sha1=" + hmac.new(SECRET, payload, hashlib.sha1).hexdigest()
 
-    if not hmac.compare_digest(x_hub_signature_256, computed):
+    strong = "sha256=" + hmac.new(SECRET, payload, hashlib.sha256).hexdigest()
+    if not (hmac.compare_digest(x_signature, strong) or hmac.compare_digest(x_signature, computed)):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     data = await request.json()
@@ -97,17 +98,18 @@ async def webhook_weak_hash_sha1(
 @app.post("/webhook/weak-hash-md5")
 async def webhook_weak_hash_md5(
     request: Request,
-    x_hub_signature_256: str = Header(None),
+    x_signature: str = Header(None),
 ):
     payload = await request.body()
 
-    if x_hub_signature_256 is None:
+    if x_signature is None:
         raise HTTPException(status_code=401, detail="Missing signature")
 
-    # MD5 는 암호학적으로 완전히 파기된 알고리즘
+    # HMAC-MD5는 신규 설계에서 비권장이다. MD5 충돌만으로 서명 위조가 입증되는 것은 아니다.
     computed = "md5=" + hmac.new(SECRET, payload, hashlib.md5).hexdigest()
 
-    if not hmac.compare_digest(x_hub_signature_256, computed):
+    strong = "sha256=" + hmac.new(SECRET, payload, hashlib.sha256).hexdigest()
+    if not (hmac.compare_digest(x_signature, strong) or hmac.compare_digest(x_signature, computed)):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     data = await request.json()
@@ -120,17 +122,17 @@ async def webhook_weak_hash_md5(
 @app.post("/webhook/no-timestamp")
 async def webhook_no_timestamp(
     request: Request,
-    x_hub_signature_256: str = Header(None),
+    x_signature: str = Header(None),
     x_timestamp: str = Header(None),  # 받기는 하지만 검증 안 함
 ):
     payload = await request.body()
 
-    if x_hub_signature_256 is None:
+    if x_signature is None:
         raise HTTPException(status_code=401, detail="Missing signature")
 
     computed = "sha256=" + hmac.new(SECRET, payload, hashlib.sha256).hexdigest()
 
-    if not hmac.compare_digest(x_hub_signature_256, computed):
+    if not hmac.compare_digest(x_signature, computed):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     # x_timestamp 를 받았지만 현재 시각과 비교하지 않음 → 재전송 공격 가능
@@ -150,14 +152,14 @@ def _verify_delegated(signature: str, payload: bytes) -> bool:
 @app.post("/webhook/delegated")
 async def webhook_delegated(
     request: Request,
-    x_hub_signature_256: str = Header(None),
+    x_signature: str = Header(None),
 ):
     payload = await request.body()
 
-    if x_hub_signature_256 is None:
+    if x_signature is None:
         raise HTTPException(status_code=401, detail="Missing signature")
 
-    if not _verify_delegated(x_hub_signature_256, payload):
+    if not _verify_delegated(x_signature, payload):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     data = await request.json()
@@ -172,15 +174,15 @@ async def webhook_delegated(
 @app.post("/webhook/delegated-external")
 async def webhook_delegated_external(
     request: Request,
-    x_hub_signature_256: str = Header(None),
+    x_signature: str = Header(None),
 ):
     payload = await request.body()
 
-    if x_hub_signature_256 is None:
+    if x_signature is None:
         raise HTTPException(status_code=401, detail="Missing signature")
 
     # 외부 함수 호출 — 이 줄만 보면 정상처럼 보임
-    if not external_verify(x_hub_signature_256, payload, SECRET):
+    if not external_verify(x_signature, payload, SECRET):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     data = await request.json()
