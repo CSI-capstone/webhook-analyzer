@@ -87,6 +87,10 @@ class HTTPAPITests(unittest.TestCase):
         result = self.run_shop('dku-toss-secret-2026')
         endpoint = result['endpoints'][0]
         self.assertTrue(endpoint['probe']['baseline_valid'])
+        self.assertEqual(endpoint['platform']['platform'], '토스페이먼츠')
+        self.assertEqual(endpoint['platform']['sig_header'], 'Tosspayments-Webhook-Signature')
+        self.assertEqual(result['total_sast_findings'], 2)
+        self.assertEqual(result['total_dast_vulns'], 1)
         self.assertTrue(any(a['status']=='vulnerable' and a['state_changed'] for a in endpoint['dast_results'] if a['attack_type']=='replay'))
         self.assertTrue(all('source_context' in f for f in endpoint['sast_findings']))
         type(self).captured['shop'] = result

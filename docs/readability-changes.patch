@@ -1,0 +1,1250 @@
+diff --git a/README.md b/README.md
+index c8ea220..f129361 100644
+--- a/README.md
++++ b/README.md
+@@ -1,4 +1,4 @@
+-# WebhookFilter
++# HookLens
+ 
+ Python 웹훅 수신 핸들러를 배포 전에 점검하는 정적·동적 분석 도구이다.
+ 기존 **SAST 5개 규칙 + DAST 3개 시나리오**와 AST → 플랫폼 감지 → SAST/DAST → 리포트 흐름을 유지한다.
+diff --git a/app.py b/app.py
+index 4a54741..12dc666 100644
+--- a/app.py
++++ b/app.py
+@@ -35,7 +35,7 @@ except ImportError:
+ 
+ 
+ app = FastAPI(
+-    title="Webhook Security Analyzer",
++    title="HookLens",
+     description="웹훅 핸들러 보안 취약점 자동 탐지 프레임워크",
+     version="2.1.0",
+ )
+diff --git a/docs/CODE_CHANGES.md b/docs/CODE_CHANGES.md
+index 9a9e53f..1c6996b 100644
+--- a/docs/CODE_CHANGES.md
++++ b/docs/CODE_CHANGES.md
+@@ -1,4 +1,4 @@
+-# WebhookFilter 코드 보완 설명서
++# HookLens 코드 보완 설명서
+ 
+ > 이 문서는 최초 내부 로직 보완 단계의 기록이다. 후속 UI 개편과 최신 검증은 [UI 개편 설명서](UI_CHANGES.md)를 참고한다.
+ 
+diff --git a/docs/UI_CHANGES.md b/docs/UI_CHANGES.md
+index 01eedb6..0750d1b 100644
+--- a/docs/UI_CHANGES.md
++++ b/docs/UI_CHANGES.md
+@@ -1,7 +1,8 @@
+-# WebhookFilter UI 개편 설명서
++# HookLens UI 개편 설명서
+ 
+ 작성일: 2026-10-20  
+-기준: 앞서 제공한 내부 로직 보완본에 UI를 추가 개편한 버전
++기준: 내부 로직 보완본과 첫 UI 개편의 배치를 유지하고, 글자만 소폭 확대한 버전  
++최신 변경: [9. 기존 배치 유지와 글자 소폭 확대](#9-기존-배치-유지와-글자-소폭-확대)
+ 
+ ## 1. 선택한 레이아웃과 참고 자료
+ 
+@@ -127,7 +128,8 @@ JSON 버튼은 실제 API 결과를 파일로 내려받는다.
+ 
+ `docs/changes.patch`는 최초 원본 ZIP 대비 통합 변경 내역이다.
+ `docs/ui-changes.patch`는 직전 내부 로직 보완본 대비 UI 작업의 변경 내역이다.
+-두 패치 파일 자체는 패치 생성 대상에서 제외했다.
++`docs/readability-changes.patch`는 첫 UI 개편본 대비 최종 글자 크기 조정과 문서 변경 내역이다.
++세 패치 파일 자체는 패치 생성 대상에서 제외했다.
+ 
+ ## 6. API에 추가한 표시 정보
+ 
+@@ -216,3 +218,86 @@ python -m unittest discover -s tests -v
+ 
+ `httpx` 또는 제품 의존성이 없으면 해당 HTTP 검사 모듈은 생략된다.
+ 앞선 내부 로직 설명서의 55개 테스트 기록은 이전 보완 단계의 기록이며, 이번 검증 수치는 위 표를 기준으로 한다.
++
++## 9. 기존 배치 유지와 글자 소폭 확대
++
++사용자가 처음 마음에 들어 했던 UI 개편본의 배치·화면 비율을 기준으로 삼았다.
++직전에 제공한 전면 확대본은 글자 외에 아이콘·버튼·카드·간격까지 커져 화면이 답답해졌다는 피드백에 따라 되돌렸다.
++최종 제품 코드 변경은 첫 UI 개편본의 화면 CSS에서 **18px 미만 글자 크기를 1~2px 키운 것**이다.
++18px 이상 제목·브랜드와 결과 핵심 숫자는 첫 UI 개편본의 크기를 유지했다.
++
++### 글자 크기
++
++| 요소 | 처음 UI 개편본 | 최종 조정본 |
++|---|---|---|
++| 기본 본문 | 14px | 15px |
++| 탐지 설명 | 12px | 14px |
++| 입력 도움말 | 11px | 13px |
++| 주요 버튼 글자 | 12px | 14px |
++| 사이드바 메뉴 글자 | 13px | 14px |
++| 상세 탭 글자 | 11px | 13px |
++| 위험도 배지 / 탭 개수 | 9px | 11px |
++| 원본 코드 / 줄 번호 | 11px / 9px | 13px / 11px |
++| 결과 핵심 숫자 | 29px | 29px |
++| 기본 아이콘 | 19px | 19px |
++
++일괄적인 최소 14px 규칙을 적용하지 않았다.
++기존 작은 글자는 8→10, 9→11, 10→12, 11→13, 12→14px로 조정했다.
++13~17px 글자는 각각 1px 키웠다. 인쇄 전용 CSS와 동적 HTML의 인라인 크기는 처음 UI 개편본 그대로다.
++
++### 그대로 유지한 배치
++
++- 사이드바 기본 폭 218px, 접힌 폭 72px.
++- 작업 영역 최대 폭 1,510px와 기존 바깥 여백.
++- 입력·결과 카드의 패딩, 결과 목록과 상세 영역의 폭 비율.
++- 아이콘 크기, 버튼 패딩, 입력창 패딩, 기존 줄 간격과 반응형 분기점.
++- 기본 4열 요약 카드, 왼쪽 엔드포인트 목록과 오른쪽 상세 탭.
++
++`min-height: 48px` 같은 전면 확대용 최소 높이나 화면 확대 비율은 추가하지 않았다.
++글자가 커지면서 텍스트 줄 상자의 높이가 조금 늘어나는 것은 정상적인 브라우저 배치 결과다.
++
++### 참고 자료
++
++앞서 검토한 [Atlassian Typography](https://atlassian.design/foundations/typography/),
++[Fluent 2 Typography](https://fluent2.microsoft.design/typography),
++[Carbon Typography](https://www.carbondesignsystem.com/building-blocks/foundations/typography/overview),
++[Carbon Spacing](https://www.carbondesignsystem.com/building-blocks/foundations/spacing/overview)의 글자 계층·일관된 간격 원칙은 참고하되,
++크기는 사용자가 선호한 기존 화면 밀도에 맞춰 정했다. 이 자료들이 특정 최소 글자 크기를 강제한다는 의미는 아니다.
++
++### 변경 범위와 검증
++
++- 첫 UI 개편본의 `frontend/index.html`과 비교해 화면 CSS의 `font-size` 값 이외 부분이 동일한지 확인했다. JavaScript와 인쇄 CSS도 동일하다.
++- 분석 엔진·API·샘플·CLI·의존성·테스트 파일이 첫 UI 개편본 및 전면 확대본과 동일한지 확인했다.
++- 기존 JavaScript 검사 **31개 재실행 통과**.
++- 브라우저에서 데스크톱 입력·결과 화면과 390px iframe의 입력·결과 배치를 확인했다.
++- 데스크톱 본문 너비와 가로 스크롤 너비는 모두 1,348px, 390px iframe 내부는 모두 375px로 화면 전체의 가로 넘침이 없었다.
++- 실제 API에서 기록한 결과를 내부 QA 페이지에서 재생했다. 이번에도 브라우저 업로드부터 운영 ASGI 응답까지 연결한 전체 과정이나 실제 모바일 기기는 검증하지 않았다.
++- Python 63개·통합 22개는 첫 UI 단계의 기존 통과 기록이며, 이번 글자 크기 변경으로 재실행하지 않았다.
++- 패치 적용과 파일 재현, ZIP 무결성을 확인했다. QA 페이지·재생 데이터·스크린샷은 제품 ZIP에 포함하지 않는다.
++
++이번 최종 조정 기록은 `docs/verification/balanced-*`에 있다.
++`readability-*` 검증 기록은 전면 확대본의 과거 기록이다.
++
++## 10. HookLens 명칭 통일
++
++최신 프로젝트 표기를 **HookLens**로 통일했다.
++화면 배치와 글자 크기는 9절의 최종 조정본을 유지한다.
++
++| 파일 | 변경 내용 |
++|---|---|
++| `frontend/index.html` | 브라우저 제목, 사이드바 이름, 하단 안내, 인쇄 리포트 제목, JSON 내보내기 파일명 |
++| `app.py` | FastAPI 문서의 서비스 제목 |
++| `README.md` | 프로젝트 제목 |
++| `samples/shop_server.py` | 데모 화면·설명·주석의 프로젝트 이름 |
++| `samples/vulnerable_zip/vulnerable_shop_server.py` | 샘플 설명·주석의 프로젝트 이름 |
++| `docs/CODE_CHANGES.md`, `docs/UI_CHANGES.md` | 문서 제목과 이번 명칭 변경 설명 |
++
++분석 모듈의 탐지·판정 조건과 5개 정적 규칙·3개 동적 시나리오, API 경로와 입력 필드, JSON 결과 스키마는 변경하지 않았다.
++샘플과 API의 변경은 설명 문자열·주석에 한정된다.
++브랜드 변경 전후 실행 코드를 비교하여 이름 치환과 API 문서 제목 이외 차이가 없는지 확인했다.
++기존 JavaScript 검사 31개와 변경된 Python 파일의 구문 검사를 수행했다.
++이번 명칭 변경에서 브라우저 시각 검증이나 Python 전체 회귀 검사를 다시 수행한 것은 아니다.
++
++`docs/name-changes.patch`는 직전 최종 UI ZIP 대비 이름 변경 내역이다.
++기존 패치는 새 결과를 기준으로 재생성했으며 패치 내부와 과거 검증 로그에는 이전 이름이 이력으로 남을 수 있다.
++9절의 바이트 동일 검증은 당시 글자 조정 단계의 기록이다.
+diff --git b/docs/verification/balanced-frontend.log b/docs/verification/balanced-frontend.log
+new file mode 100644
+index 0000000..13b2ab5
+--- /dev/null
++++ b/docs/verification/balanced-frontend.log
+@@ -0,0 +1,4 @@
++Command: node tests/check_frontend.cjs
++PASS: 31 frontend checks (status semantics, escaping, source evidence, filters, guides, print, inputs)
++Scope: first UI layout restored, only screen font-size values increased by 1–2px below 18px.
++Python and integration suites not rerun for this display-only revision.
+diff --git b/docs/verification/balanced-summary.json b/docs/verification/balanced-summary.json
+new file mode 100644
+index 0000000..92405d9
+--- /dev/null
++++ b/docs/verification/balanced-summary.json
+@@ -0,0 +1,20 @@
++{
++  "revision": "balanced",
++  "frontend_checks_passed": 31,
++  "font_size_only_against_first_ui": true,
++  "layout_and_icon_values_identical_to_first_ui": true,
++  "desktop": {
++    "body_font": "15px",
++    "metric_font": "29px",
++    "sidebar_width_px": 218,
++    "body_width_px": 1348,
++    "scroll_width_px": 1348
++  },
++  "iframe_390px": {
++    "setup_body_width_px": 375,
++    "setup_scroll_width_px": 375,
++    "results_body_width_px": 375,
++    "results_scroll_width_px": 375
++  },
++  "data": "Recorded actual API responses replayed in private QA; no new full browser-to-live-API test"
++}
+diff --git b/docs/verification/hooklens-frontend.log b/docs/verification/hooklens-frontend.log
+new file mode 100644
+index 0000000..e227263
+--- /dev/null
++++ b/docs/verification/hooklens-frontend.log
+@@ -0,0 +1,4 @@
++Command: node tests/check_frontend.cjs
++PASS: 31 frontend checks (status semantics, escaping, source evidence, filters, guides, print, inputs)
++Branding-only revision: HookLens.
++Changed Python files parsed successfully. All non-document files compared against balanced UI ZIP; only literal brand text and FastAPI title differ.
+diff --git b/docs/verification/hooklens-summary.json b/docs/verification/hooklens-summary.json
+new file mode 100644
+index 0000000..e094337
+--- /dev/null
++++ b/docs/verification/hooklens-summary.json
+@@ -0,0 +1,18 @@
++{
++  "date": "2026-10-28",
++  "brand": "HookLens",
++  "non_document_files_compared": 30,
++  "product_files_changed": [
++    "README.md",
++    "app.py",
++    "frontend/index.html",
++    "samples/shop_server.py",
++    "samples/vulnerable_zip/vulnerable_shop_server.py"
++  ],
++  "allowed_changes": "Literal brand text replacement and FastAPI documentation title only",
++  "frontend_checks_passed": 31,
++  "changed_python_files_syntax": "passed",
++  "analyzer_bytes_unchanged": true,
++  "browser_retest": false,
++  "full_python_suite_rerun": false
++}
+diff --git b/docs/verification/readability-frontend.log b/docs/verification/readability-frontend.log
+new file mode 100644
+index 0000000..cbd4f0e
+--- /dev/null
++++ b/docs/verification/readability-frontend.log
+@@ -0,0 +1,6 @@
++2026-10-20 UI readability revision
++Command: node tests/check_frontend.cjs
++PASS: 31 frontend checks (status semantics, escaping, source evidence, filters, guides, print, inputs)
++
++Product code change: frontend/index.html CSS and inline display sizes.
++Python and integration suites were passed in the previous UI revision and were not rerun for this CSS revision.
+diff --git b/docs/verification/readability-summary.json b/docs/verification/readability-summary.json
+new file mode 100644
+index 0000000..52cc6da
+--- /dev/null
++++ b/docs/verification/readability-summary.json
+@@ -0,0 +1,38 @@
++{
++  "revision": "readability",
++  "date": "2026-10-20",
++  "frontend_checks_passed": 31,
++  "python_suite_rerun": false,
++  "integration_suite_rerun": false,
++  "browser_qa": {
++    "data": "Recorded responses from the prior actual API tests, replayed in a private QA page",
++    "desktop": [
++      "setup",
++      "overview",
++      "source context",
++      "dynamic cases",
++      "fix guide"
++    ],
++    "iframe_widths_px": [
++      900,
++      390
++    ],
++    "iframe_height_px": 900,
++    "horizontal_overflow": {
++      "900px": {
++        "clientWidth": 885,
++        "scrollWidth": 885
++      },
++      "390px": {
++        "clientWidth": 375,
++        "scrollWidth": 375
++      }
++    },
++    "desktop_small_text_below_14px": []
++  },
++  "limitations": [
++    "No full browser upload-to-live-API chain in this revision",
++    "No real mobile-device or cross-browser validation",
++    "QA assets excluded from product ZIP"
++  ]
++}
+diff --git a/frontend/index.html b/frontend/index.html
+index 3b19b46..aa0e2f1 100644
+--- a/frontend/index.html
++++ b/frontend/index.html
+@@ -4,7 +4,7 @@
+     <meta charset="utf-8" />
+     <meta name="viewport" content="width=device-width,initial-scale=1" />
+     <meta name="color-scheme" content="light" />
+-    <title>WebhookFilter · 웹훅 보안 분석</title>
++    <title>HookLens · 웹훅 보안 분석</title>
+     <style>
+       :root {
+         --bg: #f5f7fb;
+@@ -38,7 +38,7 @@
+           "Segoe UI",
+           "Malgun Gothic",
+           sans-serif;
+-        font-size: 14px;
++        font-size: 15px;
+         line-height: 1.6;
+       }
+       button,
+@@ -91,11 +91,11 @@
+         line-height: 1.4;
+       }
+       h2 {
+-        font-size: 17px;
++        font-size: 18px;
+         letter-spacing: -0.5px;
+       }
+       h3 {
+-        font-size: 14px;
++        font-size: 15px;
+       }
+       small,
+       .muted {
+@@ -178,7 +178,7 @@
+       }
+       .nav-caption {
+         padding: 0 12px;
+-        font-size: 10px;
++        font-size: 12px;
+         letter-spacing: 1.6px;
+         color: #73859e;
+         margin: 10px 0;
+@@ -195,7 +195,7 @@
+         padding: 11px 13px;
+         margin: 3px 0;
+         text-align: left;
+-        font-size: 13px;
++        font-size: 14px;
+       }
+       .nav-button:hover {
+         background: #ffffff09;
+@@ -211,7 +211,7 @@
+         margin-top: auto;
+         padding: 20px 11px 0;
+         border-top: 1px solid #ffffff12;
+-        font-size: 11px;
++        font-size: 13px;
+         color: #8b9bb2;
+       }
+       .sidebar-bottom strong {
+@@ -241,7 +241,7 @@
+         gap: 20px;
+       }
+       .breadcrumb {
+-        font-size: 12px;
++        font-size: 14px;
+         color: var(--muted);
+         display: flex;
+         align-items: center;
+@@ -252,7 +252,7 @@
+         font-weight: 550;
+       }
+       .workspace-label {
+-        font-size: 11px;
++        font-size: 13px;
+         display: flex;
+         gap: 7px;
+         align-items: center;
+@@ -275,7 +275,7 @@
+         margin-bottom: 26px;
+       }
+       .eyebrow {
+-        font-size: 10px;
++        font-size: 12px;
+         color: var(--accent);
+         font-weight: 700;
+         letter-spacing: 1.7px;
+@@ -284,7 +284,7 @@
+       .subtitle {
+         color: var(--muted);
+         margin-top: 8px;
+-        font-size: 13px;
++        font-size: 14px;
+       }
+       .button {
+         display: inline-flex;
+@@ -296,7 +296,7 @@
+         background: white;
+         color: var(--ink);
+         padding: 10px 15px;
+-        font-size: 12px;
++        font-size: 14px;
+         font-weight: 600;
+         white-space: nowrap;
+       }
+@@ -317,7 +317,7 @@
+       }
+       .button.small {
+         padding: 6px 10px;
+-        font-size: 11px;
++        font-size: 13px;
+       }
+       .button .icon {
+         width: 16px;
+@@ -348,11 +348,11 @@
+         background: var(--accent-soft);
+         color: var(--accent);
+         font-weight: 700;
+-        font-size: 12px;
++        font-size: 14px;
+         border-radius: 8px;
+       }
+       .card-heading .desc {
+-        font-size: 11px;
++        font-size: 13px;
+         color: var(--muted);
+         margin-top: 2px;
+       }
+@@ -408,18 +408,18 @@
+         margin-bottom: 5px;
+       }
+       .drop-title {
+-        font-size: 13px;
++        font-size: 14px;
+         font-weight: 600;
+       }
+       .drop-title span {
+         color: var(--accent);
+       }
+       .drop-hint {
+-        font-size: 11px;
++        font-size: 13px;
+         color: var(--muted);
+       }
+       .file-detail {
+-        font-size: 11px;
++        font-size: 13px;
+         color: var(--accent);
+         word-break: break-all;
+       }
+@@ -447,11 +447,11 @@
+         margin: 4px 0 0;
+       }
+       .mode-option strong {
+-        font-size: 12px;
++        font-size: 14px;
+         display: block;
+       }
+       .mode-option small {
+-        font-size: 10px;
++        font-size: 12px;
+         display: block;
+         margin-top: 3px;
+       }
+@@ -462,12 +462,12 @@
+         min-width: 0;
+       }
+       .field label {
+-        font-size: 12px;
++        font-size: 14px;
+         font-weight: 600;
+       }
+       .field label small {
+         font-weight: 400;
+-        font-size: 10px;
++        font-size: 12px;
+         margin-left: 5px;
+       }
+       .field input,
+@@ -479,7 +479,7 @@
+         background: #fff;
+         color: var(--ink);
+         padding: 10px 12px;
+-        font-size: 12px;
++        font-size: 14px;
+         min-width: 0;
+       }
+       .field input:disabled {
+@@ -487,7 +487,7 @@
+         color: #8792a3;
+       }
+       .field-note {
+-        font-size: 11px;
++        font-size: 13px;
+         color: var(--muted);
+         line-height: 1.6;
+       }
+@@ -534,7 +534,7 @@
+         align-items: center;
+         justify-content: space-between;
+         padding: 12px 14px;
+-        font-size: 12px;
++        font-size: 14px;
+         font-weight: 550;
+         cursor: pointer;
+       }
+@@ -559,7 +559,7 @@
+         display: flex;
+         gap: 9px;
+         align-items: flex-start;
+-        font-size: 12px;
++        font-size: 14px;
+         margin-top: 16px;
+         cursor: pointer;
+       }
+@@ -569,7 +569,7 @@
+       }
+       .check-field small {
+         display: block;
+-        font-size: 10px;
++        font-size: 12px;
+         margin-top: 2px;
+       }
+       .form-footer {
+@@ -585,7 +585,7 @@
+         padding: 11px 22px;
+       }
+       .form-footer p {
+-        font-size: 10px;
++        font-size: 12px;
+         color: var(--muted);
+         max-width: 290px;
+       }
+@@ -594,7 +594,7 @@
+         margin-bottom: 17px;
+       }
+       .side-card h3 {
+-        font-size: 13px;
++        font-size: 14px;
+         margin-bottom: 16px;
+       }
+       .process-step {
+@@ -631,18 +631,18 @@
+       }
+       .process-step b {
+         display: block;
+-        font-size: 12px;
++        font-size: 14px;
+         font-weight: 600;
+       }
+       .process-step p {
+-        font-size: 11px;
++        font-size: 13px;
+         color: var(--muted);
+         margin-top: 3px;
+       }
+       .scope-line {
+         display: flex;
+         justify-content: space-between;
+-        font-size: 11px;
++        font-size: 13px;
+         padding: 8px 0;
+         border-bottom: 1px solid #eef1f6;
+       }
+@@ -659,7 +659,7 @@
+         margin-top: 15px;
+       }
+       .platform-chips span {
+-        font-size: 9px;
++        font-size: 11px;
+         border: 1px solid var(--line);
+         border-radius: 4px;
+         padding: 3px 7px;
+@@ -670,7 +670,7 @@
+         align-items: center;
+         justify-content: space-between;
+         color: var(--muted);
+-        font-size: 11px;
++        font-size: 13px;
+         margin-top: 17px;
+         border: 0;
+         background: none;
+@@ -690,7 +690,7 @@
+         border: 1px solid #e2e9f4;
+         border-radius: 8px;
+         padding: 12px 14px;
+-        font-size: 11px;
++        font-size: 13px;
+         color: #5e7190;
+       }
+       .info-strip .icon {
+@@ -702,7 +702,7 @@
+         display: flex;
+         justify-content: space-between;
+         color: #8c97a8;
+-        font-size: 10px;
++        font-size: 12px;
+         margin-top: 28px;
+         gap: 15px;
+       }
+@@ -729,7 +729,7 @@
+         gap: 9px;
+         margin-top: 24px;
+         color: var(--muted);
+-        font-size: 11px;
++        font-size: 13px;
+       }
+       .loading-meta span {
+         padding: 5px 10px;
+@@ -750,7 +750,7 @@
+         margin-bottom: 7px;
+       }
+       .error-box p {
+-        font-size: 12px;
++        font-size: 14px;
+       }
+       .notice {
+         padding: 12px 15px;
+@@ -758,7 +758,7 @@
+         background: #fffaf0;
+         color: #80602d;
+         border-radius: 8px;
+-        font-size: 11px;
++        font-size: 13px;
+         margin-bottom: 14px;
+         overflow-wrap: anywhere;
+       }
+@@ -783,11 +783,11 @@
+         flex-wrap: wrap;
+         gap: 8px;
+         color: var(--muted);
+-        font-size: 11px;
++        font-size: 13px;
+         margin-top: 8px;
+       }
+       .pill {
+-        font-size: 10px;
++        font-size: 12px;
+         padding: 3px 8px;
+         border: 1px solid var(--line);
+         border-radius: 5px;
+@@ -821,7 +821,7 @@
+         border-radius: 11px;
+       }
+       .metric-label {
+-        font-size: 10px;
++        font-size: 12px;
+         color: var(--muted);
+         display: flex;
+         align-items: center;
+@@ -839,7 +839,7 @@
+         margin-top: 9px;
+       }
+       .metric-sub {
+-        font-size: 10px;
++        font-size: 12px;
+         color: var(--muted);
+         margin-top: 6px;
+       }
+@@ -862,7 +862,7 @@
+         display: flex;
+         align-items: flex-start;
+         gap: 8px;
+-        font-size: 10px;
++        font-size: 12px;
+         color: var(--muted);
+         margin: 0 0 20px;
+       }
+@@ -887,7 +887,7 @@
+         align-items: center;
+       }
+       .list-title h2 {
+-        font-size: 12px;
++        font-size: 14px;
+       }
+       .list-controls {
+         padding: 0 12px 12px;
+@@ -896,7 +896,7 @@
+       }
+       .search-input,
+       .filter-select {
+-        font-size: 11px;
++        font-size: 13px;
+         padding: 8px 10px;
+       }
+       .endpoint-items {
+@@ -929,14 +929,14 @@
+         align-items: flex-start;
+         gap: 7px;
+         font-family: Consolas, monospace;
+-        font-size: 11px;
++        font-size: 13px;
+         color: #273c5b;
+         overflow-wrap: anywhere;
+         line-height: 1.8;
+       }
+       .method {
+         font-family: inherit;
+-        font-size: 8px;
++        font-size: 10px;
+         color: #487b66;
+         background: #edf6f1;
+         padding: 2px 4px;
+@@ -950,7 +950,7 @@
+         align-items: center;
+         gap: 7px;
+         color: var(--muted);
+-        font-size: 9px;
++        font-size: 11px;
+         margin-top: 8px;
+         flex-wrap: wrap;
+       }
+@@ -985,7 +985,7 @@
+       }
+       .endpoint-title {
+         font-family: Consolas, monospace;
+-        font-size: 17px;
++        font-size: 18px;
+         overflow-wrap: anywhere;
+         line-height: 1.6;
+       }
+@@ -999,7 +999,7 @@
+         display: inline-flex;
+         align-items: center;
+         gap: 5px;
+-        font-size: 9px;
++        font-size: 11px;
+         font-weight: 650;
+         padding: 3px 7px;
+         border-radius: 4px;
+@@ -1040,7 +1040,7 @@
+         border-bottom: 2px solid transparent;
+         background: none;
+         color: var(--muted);
+-        font-size: 11px;
++        font-size: 13px;
+         white-space: nowrap;
+       }
+       .tab-button.active {
+@@ -1049,7 +1049,7 @@
+         font-weight: 650;
+       }
+       .tab-count {
+-        font-size: 9px;
++        font-size: 11px;
+         background: #eef1f7;
+         border-radius: 4px;
+         padding: 1px 5px;
+@@ -1067,10 +1067,10 @@
+         margin-bottom: 13px;
+       }
+       .section-title h3 {
+-        font-size: 12px;
++        font-size: 14px;
+       }
+       .section-title small {
+-        font-size: 10px;
++        font-size: 12px;
+       }
+       .overview-section + .overview-section {
+         margin-top: 25px;
+@@ -1085,7 +1085,7 @@
+         border: 1px solid #dfe8fa;
+         background: #f7faff;
+         border-radius: 8px;
+-        font-size: 11px;
++        font-size: 13px;
+         margin-bottom: 19px;
+         color: #506c96;
+       }
+@@ -1106,19 +1106,19 @@
+         padding: 11px 9px;
+       }
+       .probe-step .number {
+-        font-size: 8px;
++        font-size: 10px;
+         letter-spacing: 1px;
+         color: #8c9ab0;
+       }
+       .probe-step b {
+-        font-size: 10px;
++        font-size: 12px;
+         display: block;
+         margin: 5px 0 8px;
+         font-weight: 550;
+       }
+       .probe-step strong {
+         font-family: Consolas, monospace;
+-        font-size: 12px;
++        font-size: 14px;
+         font-weight: 600;
+         color: #546984;
+       }
+@@ -1138,18 +1138,18 @@
+         margin-top: 8px;
+       }
+       .finding-summary span:nth-child(2) {
+-        font-size: 11px;
++        font-size: 13px;
+         flex: 1;
+       }
+       .finding-summary small {
+         font-family: Consolas, monospace;
+-        font-size: 10px;
++        font-size: 12px;
+       }
+       .link-button {
+         background: none;
+         border: 0;
+         color: var(--accent);
+-        font-size: 10px;
++        font-size: 12px;
+         padding: 0;
+         display: inline-flex;
+         align-items: center;
+@@ -1169,18 +1169,18 @@
+         padding: 13px 11px;
+       }
+       .mini-result b {
+-        font-size: 11px;
++        font-size: 13px;
+         font-weight: 550;
+         display: block;
+         margin-bottom: 7px;
+       }
+       .mini-result p {
+-        font-size: 10px;
++        font-size: 12px;
+         color: var(--muted);
+         margin-top: 7px;
+       }
+       .state-label {
+-        font-size: 10px;
++        font-size: 12px;
+         color: #74839a;
+         display: inline-flex;
+         align-items: center;
+@@ -1222,11 +1222,11 @@
+       }
+       .finding summary .finding-title {
+         flex: 1;
+-        font-size: 12px;
++        font-size: 14px;
+         font-weight: 550;
+       }
+       .finding summary .rule {
+-        font-size: 9px;
++        font-size: 11px;
+         color: var(--muted);
+       }
+       .finding summary > .icon {
+@@ -1242,14 +1242,14 @@
+         padding: 16px;
+       }
+       .finding-message {
+-        font-size: 12px;
++        font-size: 14px;
+         color: #52627a;
+         line-height: 1.8;
+         margin-bottom: 14px;
+         overflow-wrap: anywhere;
+       }
+       .source-location {
+-        font-size: 10px;
++        font-size: 12px;
+         color: var(--muted);
+         margin-bottom: 8px;
+         overflow-wrap: anywhere;
+@@ -1268,11 +1268,11 @@
+         background: #f5f7fc;
+         border-bottom: 1px solid var(--line);
+         padding: 9px 12px;
+-        font-size: 10px;
++        font-size: 12px;
+         color: #60718c;
+       }
+       .code-heading .button {
+-        font-size: 9px;
++        font-size: 11px;
+         padding: 3px 7px;
+       }
+       .code-block {
+@@ -1280,7 +1280,7 @@
+         padding: 14px;
+         color: #263f61;
+         background: #fbfcff;
+-        font-size: 11px;
++        font-size: 13px;
+         line-height: 1.9;
+         overflow: auto;
+         max-height: 370px;
+@@ -1306,14 +1306,14 @@
+         width: 42px;
+         margin-right: 15px;
+         color: #94a1b4;
+-        font-size: 10px;
++        font-size: 12px;
+       }
+       .recommendation {
+         padding: 12px 14px;
+         background: #f0f4ff;
+         border-radius: 7px;
+         color: #4a6294;
+-        font-size: 11px;
++        font-size: 13px;
+         line-height: 1.8;
+         margin: 12px 0;
+       }
+@@ -1324,12 +1324,12 @@
+         font-weight: 600;
+       }
+       .rule-doc {
+-        font-size: 10px;
++        font-size: 12px;
+         color: var(--muted);
+         margin-top: 11px;
+       }
+       .score-note {
+-        font-size: 9px;
++        font-size: 11px;
+         color: var(--muted);
+         margin-top: 10px;
+       }
+@@ -1340,7 +1340,7 @@
+         display: flex;
+         gap: 8px;
+         align-items: center;
+-        font-size: 12px;
++        font-size: 14px;
+         margin-bottom: 11px;
+       }
+       .dast-item {
+@@ -1368,12 +1368,12 @@
+       }
+       .variant {
+         font-family: Consolas, monospace;
+-        font-size: 10px;
++        font-size: 12px;
+         color: #69809b;
+         overflow-wrap: anywhere;
+       }
+       .dast-desc {
+-        font-size: 11px;
++        font-size: 13px;
+         color: #52637b;
+         line-height: 1.8;
+       }
+@@ -1387,12 +1387,12 @@
+         margin-top: 11px;
+       }
+       .dast-item details summary {
+-        font-size: 10px;
++        font-size: 12px;
+         color: var(--muted);
+         cursor: pointer;
+       }
+       .dast-details {
+-        font-size: 10px;
++        font-size: 12px;
+         line-height: 1.9;
+         color: #5c6f8a;
+         background: #f7f9fc;
+@@ -1402,7 +1402,7 @@
+         overflow-wrap: anywhere;
+       }
+       .state-changed {
+-        font-size: 10px;
++        font-size: 12px;
+         color: #aa354e;
+         display: flex;
+         gap: 6px;
+@@ -1417,7 +1417,7 @@
+         padding: 35px 16px;
+         text-align: center;
+         color: var(--muted);
+-        font-size: 12px;
++        font-size: 14px;
+         border: 1px dashed var(--line);
+         border-radius: 9px;
+         background: #fcfdff;
+@@ -1430,12 +1430,12 @@
+         color: #92a3bd;
+       }
+       .empty-state p {
+-        font-size: 10px;
++        font-size: 12px;
+         margin-top: 6px;
+       }
+       .file-list {
+         margin-top: 20px;
+-        font-size: 10px;
++        font-size: 12px;
+         color: var(--muted);
+         overflow-wrap: anywhere;
+       }
+@@ -1461,7 +1461,7 @@
+       }
+       .dialog p,
+       .dialog li {
+-        font-size: 12px;
++        font-size: 14px;
+         color: #5b6f8b;
+         line-height: 1.9;
+       }
+@@ -1471,7 +1471,7 @@
+       .dialog table {
+         width: 100%;
+         border-collapse: collapse;
+-        font-size: 11px;
++        font-size: 13px;
+       }
+       .dialog td {
+         padding: 9px 5px;
+@@ -1491,7 +1491,7 @@
+         background: #1a2c48;
+         color: white;
+         padding: 10px 17px;
+-        font-size: 12px;
++        font-size: 14px;
+         border-radius: 8px;
+         z-index: 100;
+         box-shadow: 0 4px 24px #172c4720;
+@@ -1533,7 +1533,7 @@
+           padding: 26px 12px;
+         }
+         .brand {
+-          font-size: 17px;
++          font-size: 18px;
+           gap: 8px;
+         }
+         .app {
+@@ -1623,7 +1623,7 @@
+           font-size: 25px;
+         }
+         .metric-sub {
+-          font-size: 9px;
++          font-size: 11px;
+         }
+         .mini-results {
+           grid-template-columns: 1fr;
+@@ -1646,7 +1646,7 @@
+       }
+       @media (max-width: 680px) {
+         body {
+-          font-size: 13px;
++          font-size: 14px;
+         }
+         .sidebar {
+           position: static;
+@@ -1661,7 +1661,7 @@
+           padding: 0;
+           gap: 8px;
+           margin-right: auto;
+-          font-size: 16px;
++          font-size: 17px;
+         }
+         .brand-name {
+           display: block;
+@@ -1695,11 +1695,11 @@
+           padding: 0 18px;
+         }
+         .breadcrumb {
+-          font-size: 10px;
++          font-size: 12px;
+           gap: 8px;
+         }
+         .workspace-label {
+-          font-size: 9px;
++          font-size: 11px;
+         }
+         .main {
+           padding: 24px 17px;
+@@ -1713,12 +1713,12 @@
+           font-size: 23px;
+         }
+         .subtitle {
+-          font-size: 11px;
++          font-size: 13px;
+           max-width: 255px;
+         }
+         .heading-actions .button {
+           padding: 8px 9px;
+-          font-size: 10px;
++          font-size: 12px;
+         }
+         .setup-main {
+           padding: 18px;
+@@ -1728,7 +1728,7 @@
+           gap: 6px;
+         }
+         .mode-option small {
+-          font-size: 9px;
++          font-size: 11px;
+         }
+         .two-columns {
+           grid-template-columns: 1fr;
+@@ -1786,7 +1786,7 @@
+           padding: 18px;
+         }
+         .endpoint-title {
+-          font-size: 15px;
++          font-size: 16px;
+         }
+         .tabs {
+           padding: 0 18px;
+@@ -1801,7 +1801,7 @@
+         }
+         .finding summary .finding-title {
+           min-width: 50%;
+-          font-size: 11px;
++          font-size: 13px;
+         }
+         .finding summary .rule {
+           order: 3;
+@@ -1811,7 +1811,7 @@
+           padding: 13px;
+         }
+         .footer {
+-          font-size: 9px;
++          font-size: 11px;
+           flex-direction: column;
+           gap: 5px;
+         }
+@@ -1824,10 +1824,10 @@
+           left: 20px;
+         }
+         .code-block {
+-          font-size: 10px;
++          font-size: 12px;
+         }
+         .section-title small {
+-          font-size: 9px;
++          font-size: 11px;
+         }
+       }
+       @media print {
+@@ -1987,7 +1987,7 @@
+       <div class="brand">
+         <span class="brandmark"
+           ><svg class="icon"><use href="#i-shield" /></svg></span
+-        ><span class="brand-name">WebhookFilter</span>
++        ><span class="brand-name">HookLens</span>
+       </div>
+       <nav>
+         <div class="nav-caption">WORKSPACE</div>
+@@ -2332,7 +2332,7 @@
+         </section>
+         <div id="print-report" class="print-report"></div>
+         <footer class="footer">
+-          <span>WebhookFilter · 수신 코드 보안 점검 워크스페이스</span
++          <span>HookLens · 수신 코드 보안 점검 워크스페이스</span
+           ><span>Python &nbsp; / &nbsp; SAST 5개 규칙 · DAST 3개 시나리오</span>
+         </footer>
+       </main>
+@@ -2888,14 +2888,14 @@ ${data.files_analyzed?.length ? `<div class="file-list">분석 파일 · ${data.
+         const url = URL.createObjectURL(blob);
+         const link = document.createElement("a");
+         link.href = url;
+-        link.download = `WebhookFilter-${String(ui.report.target_file || "report").replace(/[^a-zA-Z0-9._-]/g, "_")}.json`;
++        link.download = `HookLens-${String(ui.report.target_file || "report").replace(/[^a-zA-Z0-9._-]/g, "_")}.json`;
+         document.body.appendChild(link);
+         link.click();
+         link.remove();
+         setTimeout(() => URL.revokeObjectURL(url), 1000);
+       }
+       function buildPrintReport(data) {
+-        return `<h1>WebhookFilter · 분석 리포트</h1><p>${escHtml(data.target_file)} · ${escHtml(data.overall_grade)} · ${number(data.elapsed_sec)}초</p><p>정적 위험 징후 ${number(data.total_sast_findings)}건 · 동적 처리 증거 ${number(data.total_dast_vulns)}건</p><p>관측 ${number(data.total_dast_observations)} · 판단 불가 ${number(data.total_dast_inconclusive)} · 생략 ${number(data.total_dast_skipped)}</p><p>지원하는 점검 범위의 결과이며 전체 안전을 보증하지 않습니다. 수치는 규칙 참고 위험도입니다.</p>${[...(data.analysis_warnings || []), ...(data.dast_warnings || []), ...(data.warning ? [data.warning] : [])].map((w) => `<p>${escHtml(w)}</p>`).join("")}${(data.endpoints || []).map((ep, i) => `<h2>${escHtml(ep.path)}</h2><p>${escHtml(ep.platform?.platform || "일반 HMAC")} · ${escHtml(ep.analysis_status)} · ${escHtml(ep.overall_severity)} · 참고 위험도 ${number(ep.overall_cvss).toFixed(1)}</p><h3>정적 분석</h3>${renderSAST(ep.sast_findings || [], i, ep.platform?.platform)}<h3>동적 시험</h3>${renderDAST(ep.dast_results || [], ep.dast_confidence, ep.combined_note)}<h3>수정 가이드</h3>${renderFixes(ep.sast_findings || [], i, ep.platform?.platform)}`).join("")}`;
++        return `<h1>HookLens · 분석 리포트</h1><p>${escHtml(data.target_file)} · ${escHtml(data.overall_grade)} · ${number(data.elapsed_sec)}초</p><p>정적 위험 징후 ${number(data.total_sast_findings)}건 · 동적 처리 증거 ${number(data.total_dast_vulns)}건</p><p>관측 ${number(data.total_dast_observations)} · 판단 불가 ${number(data.total_dast_inconclusive)} · 생략 ${number(data.total_dast_skipped)}</p><p>지원하는 점검 범위의 결과이며 전체 안전을 보증하지 않습니다. 수치는 규칙 참고 위험도입니다.</p>${[...(data.analysis_warnings || []), ...(data.dast_warnings || []), ...(data.warning ? [data.warning] : [])].map((w) => `<p>${escHtml(w)}</p>`).join("")}${(data.endpoints || []).map((ep, i) => `<h2>${escHtml(ep.path)}</h2><p>${escHtml(ep.platform?.platform || "일반 HMAC")} · ${escHtml(ep.analysis_status)} · ${escHtml(ep.overall_severity)} · 참고 위험도 ${number(ep.overall_cvss).toFixed(1)}</p><h3>정적 분석</h3>${renderSAST(ep.sast_findings || [], i, ep.platform?.platform)}<h3>동적 시험</h3>${renderDAST(ep.dast_results || [], ep.dast_confidence, ep.combined_note)}<h3>수정 가이드</h3>${renderFixes(ep.sast_findings || [], i, ep.platform?.platform)}`).join("")}`;
+       }
+       function printReport() {
+         if (!ui.report) return;
+diff --git a/samples/shop_server.py b/samples/shop_server.py
+index ab0c5eb..acb688b 100644
+--- a/samples/shop_server.py
++++ b/samples/shop_server.py
+@@ -8,9 +8,9 @@ samples/shop_server.py
+   모의 HMAC 결제 웹훅을 연동한 상황을 가정합니다.
+ 
+   "개발은 다 됐는데... 혹시 보안에 문제가 있지 않을까?"
+-  → WebhookFilter에 코드를 입력하면 취약점을 자동으로 찾아줍니다.
++  → HookLens에 코드를 입력하면 취약점을 자동으로 찾아줍니다.
+ 
+-[WebhookFilter 입력값]
++[HookLens 입력값]
+   소스코드         : demo/shop_server.py (이 파일)
+   웹훅 URL         : http://localhost:8000
+   HMAC 시크릿 키   : dku-toss-secret-2026
+@@ -36,7 +36,7 @@ from fastapi.responses import HTMLResponse
+ # 앱 설정
+ app = FastAPI(
+     title="단국 굿즈샵",
+-    description="모의 HMAC 결제 연동 쇼핑몰 (WebhookFilter 시연용)",
++    description="모의 HMAC 결제 연동 쇼핑몰 (HookLens 시연용)",
+     version="1.0.0",
+ )
+ 
+@@ -90,7 +90,7 @@ async def index():
+       <h1>🎓 단국 굿즈샵</h1>
+       <p>단국대학교 공식 기념품 온라인 스토어입니다.</p>
+       <p>결제는 <strong>모의 HMAC</strong>를 통해 처리됩니다.
+-         <span class=\"badge\">WebhookFilter 시연용</span></p>
++         <span class=\"badge\">HookLens 시연용</span></p>
+ 
+       <h2>📦 상품 목록</h2>
+       <table>
+@@ -112,7 +112,7 @@ async def index():
+       </table>
+ 
+       <footer>
+-        ⚠️ 이 서버는 WebhookFilter 캡스톤 시연용 데모 서버입니다.
++        ⚠️ 이 서버는 HookLens 캡스톤 시연용 데모 서버입니다.
+         실제 서비스에 사용하지 마세요.
+       </footer>
+     </body>
+@@ -140,7 +140,7 @@ async def get_product(product_id: str):
+ async def create_order(request: Request):
+     """
+     주문을 생성하고 order_id를 반환합니다.
+-    WebhookFilter Tier 1: 상태 생성 경로로 사용됩니다.
++    HookLens Tier 1: 상태 생성 경로로 사용됩니다.
+ 
+     요청 예시:
+       {"product_id": "P001"}
+@@ -183,7 +183,7 @@ async def list_orders():
+ async def get_order(order_id: str):
+     """
+     주문 상태를 조회합니다.
+-    WebhookFilter Tier 1: 상태 조회 경로로 사용됩니다.
++    HookLens Tier 1: 상태 조회 경로로 사용됩니다.
+     """
+     if order_id not in _order_db:
+         raise HTTPException(status_code=404, detail="주문을 찾을 수 없습니다.")
+@@ -191,7 +191,7 @@ async def get_order(order_id: str):
+ 
+ 
+ # 모의 HMAC 웹훅 수신 엔드포인트
+-# [의도된 취약점 — WebhookFilter 탐지 대상]
++# [의도된 취약점 — HookLens 탐지 대상]
+ #   WHSEC-002  (HIGH)   : 일반 비교 사용 — 타이밍 노출 가능성(시크릿 복구를 입증한 것은 아님)
+ #   WHSEC-004  (MEDIUM) : "x-timestamp" 헤더를 읽지만 time.time()과 비교하지 않음 → 만료된 요청 재전송(Replay) 공격 가능
+ @app.post("/webhook/toss-payment")
+@@ -251,7 +251,7 @@ async def toss_payment_webhook(
+         # 결제 완료 → 주문 상태 업데이트
+         order_id = (
+             data.get("data", {}).get("orderId")   # 모의 HMAC 표준 형식
+-            or data.get("order_id")               # WebhookFilter 테스트 형식
++            or data.get("order_id")               # HookLens 테스트 형식
+         )
+ 
+         if order_id and str(order_id) in _order_db:
+diff --git a/samples/vulnerable_zip/vulnerable_shop_server.py b/samples/vulnerable_zip/vulnerable_shop_server.py
+index bdcc48e..a88815f 100644
+--- a/samples/vulnerable_zip/vulnerable_shop_server.py
++++ b/samples/vulnerable_zip/vulnerable_shop_server.py
+@@ -1,10 +1,10 @@
+ """
+ shop_server.py — 단국 굿즈샵 (취약한 버전)
+ 
+-  WebhookFilter 시연용 — 취약한 서버 (WHSEC 001 ~ 005 전부 포함)
++  HookLens 시연용 — 취약한 서버 (WHSEC 001 ~ 005 전부 포함)
+ 
+ 
+-[WebhookFilter 입력값]
++[HookLens 입력값]
+   소스코드         : vulnerable_zip.zip (이 파일 + webhook_utils.py)
+   웹훅 URL         : http://localhost:8000
+   HMAC 시크릿 키   : dku-toss-secret-2026
+@@ -33,7 +33,7 @@ from webhook_utils import audit_signature
+ 
+ app = FastAPI(
+     title="단국 굿즈샵 (취약한 버전)",
+-    description="WebhookFilter 시연용 — WHSEC 001~005 모두 포함",
++    description="HookLens 시연용 — WHSEC 001~005 모두 포함",
+ )
+ 
+ WEBHOOK_SECRET = b"dku-toss-secret-2026"

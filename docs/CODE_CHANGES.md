@@ -2,6 +2,9 @@
 
 > 이 문서는 최초 내부 로직 보완 단계의 기록이다. 후속 UI 개편과 최신 검증은 [UI 개편 설명서](UI_CHANGES.md)를 참고한다.
 
+작성일: 2026-10-20  
+기준 원본: `webhook-analyzer-main (5).zip` (동일 내용의 `(5)(1).zip` 포함)  
+원본 ZIP SHA-256: `b13984a1580967830766629275c8c6499fdc2456aedeb889bb499ec532b3a28a`
 
 ## 1. 보완 목적과 유지한 범위
 
@@ -62,7 +65,7 @@
 | `server/test_server.py` | 서명된 본문 시간 검사, 실제 다운그레이드용 강한/약한 방식 동시 허용 예제, Toss 시험 형식 정정 |
 | `samples/secure_webhook.py` | 일반 HMAC 예제 헤더를 X-Signature로 구분, 본문의 서명된 시간값 검증 |
 | `samples/vulnerable_webhook.py` | 일반 HMAC 헤더 구분, SHA256 기준 요청도 받는 다운그레이드 결함 표현, 해시 설명 정정 |
-| `samples/shop_server.py` | 실제 토스 결제 연동이 아닌 모의 HMAC 쇼핑몰로 정정 |
+| `samples/shop_server.py` | 토스 서명 형식의 모의 쇼핑몰. 실제 결제 API 연동 없음. 기존 일반 HMAC 예제는 `generic_shop_server.py`로 보관 |
 | `samples/vulnerable_zip/vulnerable_shop_server.py` | 같은 모의 서비스 표현과 헤더 명칭 반영 |
 | `tests/test_integration.py` | 새 판정 상태 검증, 플랫폼 시크릿 형식, 임의 포트·세션 정리 |
 | `tests/test_regressions.py` **추가** | 정적·동적 판정 반례, 서명 벡터, 등급·업로드 회귀 시험 |
@@ -249,13 +252,13 @@ Slack Probe에도 `X-Slack-Request-Timestamp`가 포함되도록 정상 헤더 �
 ### 토스페이먼츠
 
 보완 전 `HMAC(secret, body)`를 Base64로만 인코딩하던 코드를 수정했다.
-서명이 제공되는 지급대행·셀러 이벤트에 맞춰 `body:transmission-time`을 서명하고 `v1:<Base64>` 형식을 생성한다.
-전송 시각·전달 ID 헤더를 생성한다. 모의 이벤트는 `payout.changed`이다.
+`body:transmission-time`을 서명하고 `v1:<Base64>` 형식을 생성한다.
+전송 시각·전달 ID 헤더를 생성하며, 현재 모의 이벤트는 `PAYMENT_STATUS_CHANGED`이다.
 
-일반 결제 `PAYMENT_STATUS_CHANGED`에 이 서명이 있다고 가정하지 않는다.
-결제 조회 API로 진위를 확인하는 일반 결제 연동 검증은 이번 자동 분석 범위 밖이다.
-이 때문에 주 쇼핑몰 예제는 **사용자 정의 HMAC 모의 서비스**로 설명을 바로잡았다.
-기존 데모 실행 키 문자열은 호환을 위해 유지했지만 실제 토스 키로 설명하지 않는다.
+2026-11-26 확인한 공식 문서는 모든 지원 웹훅 이벤트에 서명 헤더를 제공한다고 안내한다. 이전 문서의 지급대행 한정 설명은 정정한다.
+주 쇼핑몰도 토스 서명 형식으로 맞추고 여러 v1 서명을 처리하도록 했다. 여러 서명 중 하나의 양의 비교 결과로 수락·거부하는 제한된 `any(... for ...)` 패턴을 정적 분석에서 인식한다.
+시연용 일반 비교와 시간 만료 검사 누락은 유지하며, ISO 8601 시간값에 맞춘 수정 참고 예제를 제공한다.
+기존 일반 HMAC 쇼핑몰은 `samples/generic_shop_server.py`로 보관했다. 시연 키는 공개된 모의 키이며 실제 결제 API나 결제 조회 업무 연동은 검증하지 않는다.
 
 ### PortOne V2
 

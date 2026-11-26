@@ -123,6 +123,18 @@ class ASTChecks:
                 return True
             if isinstance(expr, ast.Call) and call_name(expr, pr) == 'hmac.compare_digest':
                 return True
+            # 여러 v1 서명 중 하나를 확인하는 any(양의 비교 for ...) 패턴.
+            # !=, all(), 필터·다중 generator 등은 이 지원 패턴에 포함하지 않는다.
+            if (isinstance(expr, ast.Call) and call_name(expr, pr) == 'any'
+                    and 'any' not in pr.functions and len(expr.args) == 1 and not expr.keywords
+                    and isinstance(expr.args[0], ast.GeneratorExp)):
+                generator = expr.args[0]
+                if len(generator.generators) == 1 and not generator.generators[0].ifs and not generator.generators[0].is_async:
+                    comparison = generator.elt
+                    return ((signature_compare(comparison) and len(comparison.ops) == 1
+                             and isinstance(comparison.ops[0], ast.Eq))
+                            or (isinstance(comparison, ast.Call)
+                                and call_name(comparison, pr) == 'hmac.compare_digest'))
         elif isinstance(expr, ast.Compare):
             # time.time() 로그 호출은 인정하지 않는다. 시간과 수신 시간의 실제 비교가 필요하다.
             expanded = list(ast.walk(expr))

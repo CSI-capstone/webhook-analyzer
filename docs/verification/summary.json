@@ -1,0 +1,12 @@
+{
+  "python": "3.12.14",
+  "requests": "2.34.2",
+  "unit_tests": 55,
+  "failures": 0,
+  "errors": 0,
+  "integration_exit": 0,
+  "integration_checks": 22,
+  "python_310_syntax": "PASS",
+  "sast_findings": 7,
+  "dast_confirmed_core_cases": 15
+}

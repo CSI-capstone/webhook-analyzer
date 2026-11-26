@@ -1,0 +1,339 @@
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 1: 정적 분석 (SAST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ──────────────────────────────────────────────────────────
+  취약 서버 (vulnerable_webhook.py)
+  ──────────────────────────────────────────────────────────
+  Finding: 7건
+    WHSEC-001 CRITICAL | webhook_no_verify              | 핸들러 'webhook_no_verify' (/webhook/no-verify)에서 서명 
+    WHSEC-002 HIGH     | webhook_timing_attack          | 핸들러 'webhook_timing_attack' (함수: webhook_timing_at
+    WHSEC-003 MEDIUM   | webhook_weak_hash_sha1         | 핸들러 'webhook_weak_hash_sha1' (함수: webhook_weak_has
+    WHSEC-003 MEDIUM   | webhook_weak_hash_md5          | 핸들러 'webhook_weak_hash_md5' (함수: webhook_weak_hash
+    WHSEC-004 MEDIUM   | webhook_no_timestamp           | 핸들러 'webhook_no_timestamp' (/webhook/no-timestamp)
+    WHSEC-002 HIGH     | webhook_delegated              | 핸들러 'webhook_delegated' (함수: _verify_delegated)에서 
+    WHSEC-005 HIGH     | webhook_delegated_external     | 핸들러 'webhook_delegated_external' (함수: verify_signa
+
+  ──────────────────────────────────────────────────────────
+  SAST 검증
+  ──────────────────────────────────────────────────────────
+  ✅ Rule 1: 서명 누락 1건
+  ✅ Rule 2: 타이밍공격 2건 (직접+위임)
+  ✅ Rule 3: 취약해시 2건 (SHA1+MD5)
+  ✅ Rule 4: 타임스탬프 누락 1건
+  ✅ Rule 5: 외부위임 결함 1건+
+  ✅ 수정 코드 스니펫 7건 생성
+
+  ──────────────────────────────────────────────────────────
+  안전 서버 (secure_webhook.py)
+  ──────────────────────────────────────────────────────────
+  Finding: 0건
+  ✅ 안전 서버 0건 (오탐 없음)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 2: 동적 분석 (DAST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  서버 시작: http://127.0.0.1:44165
+
+  ──────────────────────────────────────────────────────────
+  Probe — Tier 분류
+  ──────────────────────────────────────────────────────────
+  🟢 Tier 1 /webhook/no-verify             1:200 ⚠V1 2:200 3:200 4:✓
+  🟢 Tier 1 /webhook/timing-attack         1:401 2:401 3:200 4:✓
+  🟢 Tier 1 /webhook/weak-hash-sha1        1:401 2:401 3:200 4:✓
+  🟢 Tier 1 /webhook/weak-hash-md5         1:401 2:401 3:200 4:✓
+  🟢 Tier 1 /webhook/no-timestamp          1:401 2:401 3:200 4:✓
+  🟢 Tier 1 /webhook/secure                1:401 2:401 3:200 4:✓
+  ✅ 전체 Tier 1 (상태조회 가능)
+
+  ──────────────────────────────────────────────────────────
+  DAST 공격 — 다운그레이드 + 재전송 + 타입혼동
+  ──────────────────────────────────────────────────────────
+  🔴 /webhook/no-verify             downgrade        HIGH   | 서명 정책 시험(sha1) — 정책 위반 처리 증거 확인
+  🔴 /webhook/no-verify             downgrade        HIGH   | 서명 정책 시험(md5) — 정책 위반 처리 증거 확인
+  🔴 /webhook/no-verify             downgrade        HIGH   | 서명 정책 시험(missing_signature) — 정책 위반 처리 증거 확인
+  🔴 /webhook/no-verify             replay           HIGH   | 만료 요청 시험 — 정책 위반 처리 증거 확인
+  🔴 /webhook/no-verify             replay           HIGH   | 본문·서명 유지 후 시간 헤더만 갱신 — 정책 위반 처리 증거 확인
+  🔴 /webhook/timing-attack         replay           HIGH   | 만료 요청 시험 — 정책 위반 처리 증거 확인
+  🔴 /webhook/timing-attack         replay           HIGH   | 본문·서명 유지 후 시간 헤더만 갱신 — 정책 위반 처리 증거 확인
+  🔴 /webhook/weak-hash-sha1        downgrade        HIGH   | 서명 정책 시험(sha1) — 정책 위반 처리 증거 확인
+  🔴 /webhook/weak-hash-sha1        replay           HIGH   | 만료 요청 시험 — 정책 위반 처리 증거 확인
+  🔴 /webhook/weak-hash-sha1        replay           HIGH   | 본문·서명 유지 후 시간 헤더만 갱신 — 정책 위반 처리 증거 확인
+  🔴 /webhook/weak-hash-md5         downgrade        HIGH   | 서명 정책 시험(md5) — 정책 위반 처리 증거 확인
+  🔴 /webhook/weak-hash-md5         replay           HIGH   | 만료 요청 시험 — 정책 위반 처리 증거 확인
+  🔴 /webhook/weak-hash-md5         replay           HIGH   | 본문·서명 유지 후 시간 헤더만 갱신 — 정책 위반 처리 증거 확인
+  🔴 /webhook/no-timestamp          replay           HIGH   | 만료 요청 시험 — 정책 위반 처리 증거 확인
+  🔴 /webhook/no-timestamp          replay           HIGH   | 본문·서명 유지 후 시간 헤더만 갱신 — 정책 위반 처리 증거 확인
+  🟢 /webhook/secure                전공격 거부
+
+  ──────────────────────────────────────────────────────────
+  DAST 검증
+  ──────────────────────────────────────────────────────────
+  ✅ V1 서명없음 수락
+  ✅ V2 타이밍공격 SAST 검출
+  ✅ V3a SHA1 다운그레이드 수락
+  ✅ V3b MD5 다운그레이드 수락
+  ✅ V4 재전송 수락
+  ✅ S 전공격 거부 (안전)
+  ✅ S 타입혼동 거부 (안전)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 2.5: 플랫폼별 엔드포인트 검증
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ Stripe 재전송 수락 — 타임스탬프 미검증
+       🔴 replay           HIGH | 만료 요청 시험 — 정책 위반 처리 증거 확인
+  ✅ Toss 재전송 수락 — 타임스탬프 미검증 (== 비교는 SAST로 탐지)
+       🔴 replay           HIGH | 만료 요청 시험 — 정책 위반 처리 증거 확인
+  ✅ Slack 재전송 수락 — 타임스탬프 미검증
+       🔴 replay           HIGH | 만료 요청 시험 — 정책 위반 처리 증거 확인
+  ✅ PortOne 서명 검증 누락 — 다운그레이드 수락
+       🔴 downgrade        HIGH | 서명 정책 시험(invalid_signature) — 정책 위반 처리 증거 확인
+       🔴 replay           HIGH | 만료 요청 시험 — 정책 위반 처리 증거 확인
+       🔴 replay           HIGH | 본문·서명 유지 후 시간 헤더만 갱신 — 정책 위반 처리 증거 확인
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 3: 등급 결정 + 리포트
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+======================================================================
+  웹훅 보안 분석 리포트
+======================================================================
+  대상: vulnerable_webhook.py
+  전체 등급: F — 즉시 검토 필요
+  SAST 탐지: 7건
+  DAST 확인: 15건 | 수락 관측: 10건 | 판단 불가: 0건 | 생략: 0건
+
+──────────────────────────────────────────────────────────────────────
+  🔴 /webhook/no-verify
+  등급: CRITICAL | 참고 위험도: 9.8 | Tier 1
+  동적분석 신뢰도: Tier 1 — 상태 교차 검증 가능 (공격 전후 DB 상태 비교)
+  교차 검토: 같은 점검 항목의 정적·동적 증거 확인: WHSEC-001
+
+  [정적 분석]
+    WHSEC-001 CRITICAL L 39 | 핸들러 'webhook_no_verify' (/webhook/no-verify)에서 서명 비교 결과로 처리를 제한하는 지원 패턴을 찾지 못했습니다.
+      수정: HMAC-SHA256 서명 검증을 추가하세요.
+      ┌─ 수정 코드 스니펫 ─┐
+      │ # ── 참고 예제: 사용자 정의 HMAC 서명 검증 ──
+      │ # 실제 GitHub/Stripe/Slack/Toss/PortOne의 헤더·서명 입력·SDK 명세에 맞춰 적용하세요.
+      │ import hmac, hashlib, os
+      │ from fastapi import Request, HTTPException, Header
+      │ 
+      │ WEBHOOK_SECRET = os.environ["WEBHOOK_SECRET"].encode()
+      │ 
+      │ @app.post("/webhook/no-verify")
+      │ async def webhook_no_verify(
+      │     request: Request,
+      │     x_hub_signature_256: str = Header(None),
+      │ ):
+      │ ... (이하 생략)
+      └───────────────────┘
+    WHSEC-002 HIGH     L149 | 핸들러 'webhook_delegated' (함수: _verify_delegated)에서 서명을 일반 비교합니다. 타이밍 노출 가능성 검토 필요.
+      수정: 상수 시간 비교를 사용하고 != 조건의 부정 의미를 유지하세요.
+      ┌─ 수정 코드 스니펫 ─┐
+      │ # 비교 조건만 바꾸고 기존 성공/거부 분기는 유지하세요.
+      │ import hmac
+      │ if hmac.compare_digest(signature, computed):
+      │     # 기존 분기 내용
+      │     pass
+      └───────────────────┘
+    WHSEC-005 HIGH     L 20 | 핸들러 'webhook_delegated_external' (함수: verify_signature)에서 서명을 일반 비교합니다. 타이밍 노출 가능성 검토 필요.
+      수정: 상수 시간 비교를 사용하고 != 조건의 부정 의미를 유지하세요.
+      ┌─ 수정 코드 스니펫 ─┐
+      │ # 비교 조건만 바꾸고 기존 성공/거부 분기는 유지하세요.
+      │ import hmac
+      │ if hmac.compare_digest(signature, computed):
+      │     # 기존 분기 내용
+      │     pass
+      └───────────────────┘
+
+  [동적 분석 — 취약점]
+    🔴 downgrade        HIGH   | 서명 정책 시험(sha1) — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+    🔴 downgrade        HIGH   | 서명 정책 시험(md5) — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+    🔴 downgrade        HIGH   | 서명 정책 시험(missing_signature) — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+    🔴 replay           HIGH   | 만료 요청 시험 — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+    🔴 replay           HIGH   | 본문·서명 유지 후 시간 헤더만 갱신 — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+
+  [동적 분석 — 거부·관측·미완료]
+    [observed] type_confusion   | 입력 형식 시험(text_plain) — 수락 관측, 추가 검토 필요
+    [observed] type_confusion   | 입력 형식 시험(array_body) — 수락 관측, 추가 검토 필요
+
+──────────────────────────────────────────────────────────────────────
+  🟠 /webhook/timing-attack
+  등급: HIGH | 참고 위험도: 7.4 | Tier 1
+  동적분석 신뢰도: Tier 1 — 상태 교차 검증 가능 (공격 전후 DB 상태 비교)
+  교차 검토: 정적·동적 결과가 있으나 같은 결함의 교차 확인은 아님
+
+  [정적 분석]
+    WHSEC-002 HIGH     L 64 | 핸들러 'webhook_timing_attack' (함수: webhook_timing_attack)에서 서명을 일반 비교합니다. 타이밍 노출 가능성 검토 필요.
+      수정: 상수 시간 비교를 사용하고 != 조건의 부정 의미를 유지하세요.
+      ┌─ 수정 코드 스니펫 ─┐
+      │ # 비교 조건만 바꾸고 기존 성공/거부 분기는 유지하세요.
+      │ import hmac
+      │ if hmac.compare_digest(x_signature, computed):
+      │     # 기존 분기 내용
+      │     pass
+      └───────────────────┘
+
+  [동적 분석 — 취약점]
+    🔴 replay           HIGH   | 만료 요청 시험 — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+    🔴 replay           HIGH   | 본문·서명 유지 후 시간 헤더만 갱신 — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+
+  [동적 분석 — 거부·관측·미완료]
+    [rejected] downgrade        | 서명 정책 시험(sha1) — 시험 요청 거부 관측
+    [rejected] downgrade        | 서명 정책 시험(md5) — 시험 요청 거부 관측
+    [rejected] downgrade        | 서명 정책 시험(missing_signature) — 시험 요청 거부 관측
+    [observed] type_confusion   | 입력 형식 시험(text_plain) — 수락 관측, 추가 검토 필요
+    [observed] type_confusion   | 입력 형식 시험(array_body) — 수락 관측, 추가 검토 필요
+
+──────────────────────────────────────────────────────────────────────
+  🟡 /webhook/weak-hash-sha1
+  등급: MEDIUM | 참고 위험도: 6.5 | Tier 1
+  동적분석 신뢰도: Tier 1 — 상태 교차 검증 가능 (공격 전후 DB 상태 비교)
+  교차 검토: 같은 점검 항목의 정적·동적 증거 확인: WHSEC-003
+
+  [정적 분석]
+    WHSEC-003 MEDIUM   L 85 | 핸들러 'webhook_weak_hash_sha1' (함수: webhook_weak_hash_sha1): HMAC-SHA1 사용. 신규 구현은 SHA-256 권장; 서명 위조 성공의 증거는 아닙니다.
+      수정: 허용 알고리즘 정책과 제공자 명세를 확인하세요. 해시 충돌과 HMAC 위조는 구분해야 합니다.
+      ┌─ 수정 코드 스니펫 ─┐
+      │ # 제공자 명세와 호환되는지 확인하고 송신 측과 함께 변경하세요.
+      │ import hmac, hashlib
+      │ computed = hmac.new(SECRET, payload, hashlib.sha256).hexdigest()
+      │ # 실제 헤더 접두사와 hex/Base64 인코딩은 해당 플랫폼 명세를 따르세요.
+      └───────────────────┘
+
+  [동적 분석 — 취약점]
+    🔴 downgrade        HIGH   | 서명 정책 시험(sha1) — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+    🔴 replay           HIGH   | 만료 요청 시험 — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+    🔴 replay           HIGH   | 본문·서명 유지 후 시간 헤더만 갱신 — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+
+  [동적 분석 — 거부·관측·미완료]
+    [rejected] downgrade        | 서명 정책 시험(md5) — 시험 요청 거부 관측
+    [rejected] downgrade        | 서명 정책 시험(missing_signature) — 시험 요청 거부 관측
+    [observed] type_confusion   | 입력 형식 시험(text_plain) — 수락 관측, 추가 검토 필요
+    [observed] type_confusion   | 입력 형식 시험(array_body) — 수락 관측, 추가 검토 필요
+
+──────────────────────────────────────────────────────────────────────
+  🟡 /webhook/weak-hash-md5
+  등급: MEDIUM | 참고 위험도: 6.5 | Tier 1
+  동적분석 신뢰도: Tier 1 — 상태 교차 검증 가능 (공격 전후 DB 상태 비교)
+  교차 검토: 같은 점검 항목의 정적·동적 증거 확인: WHSEC-003
+
+  [정적 분석]
+    WHSEC-003 MEDIUM   L109 | 핸들러 'webhook_weak_hash_md5' (함수: webhook_weak_hash_md5): HMAC-MD5 사용. 신규 구현은 SHA-256 권장; 서명 위조 성공의 증거는 아닙니다.
+      수정: 허용 알고리즘 정책과 제공자 명세를 확인하세요. 해시 충돌과 HMAC 위조는 구분해야 합니다.
+      ┌─ 수정 코드 스니펫 ─┐
+      │ # 제공자 명세와 호환되는지 확인하고 송신 측과 함께 변경하세요.
+      │ import hmac, hashlib
+      │ computed = hmac.new(SECRET, payload, hashlib.sha256).hexdigest()
+      │ # 실제 헤더 접두사와 hex/Base64 인코딩은 해당 플랫폼 명세를 따르세요.
+      └───────────────────┘
+
+  [동적 분석 — 취약점]
+    🔴 downgrade        HIGH   | 서명 정책 시험(md5) — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+    🔴 replay           HIGH   | 만료 요청 시험 — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+    🔴 replay           HIGH   | 본문·서명 유지 후 시간 헤더만 갱신 — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+
+  [동적 분석 — 거부·관측·미완료]
+    [rejected] downgrade        | 서명 정책 시험(sha1) — 시험 요청 거부 관측
+    [rejected] downgrade        | 서명 정책 시험(missing_signature) — 시험 요청 거부 관측
+    [observed] type_confusion   | 입력 형식 시험(text_plain) — 수락 관측, 추가 검토 필요
+    [observed] type_confusion   | 입력 형식 시험(array_body) — 수락 관측, 추가 검토 필요
+
+──────────────────────────────────────────────────────────────────────
+  🟡 /webhook/no-timestamp
+  등급: MEDIUM | 참고 위험도: 5.9 | Tier 1
+  동적분석 신뢰도: Tier 1 — 상태 교차 검증 가능 (공격 전후 DB 상태 비교)
+  교차 검토: 같은 점검 항목의 정적·동적 증거 확인: WHSEC-004
+
+  [정적 분석]
+    WHSEC-004 MEDIUM   L123 | 핸들러 'webhook_no_timestamp' (/webhook/no-timestamp): 타임스탬프를 받지만 검증하지 않음. 재전송 공격에 취약.
+      수정: time.time()과 비교하여 ±5분 이내인지 검증하세요.
+      ┌─ 수정 코드 스니펫 ─┐
+      │ # ── 예제: 타임스탬프 검증 추가 ──
+      │ # 시간값도 제공자 명세에 따라 서명으로 보호되어야 합니다.
+      │ # GitHub 등 시간 서명이 없는 프로토콜에는 이 예제를 그대로 적용하지 마세요.
+      │ 
+      │ # [1단계] 파일 상단 (import 아래)에 추가
+      │ import time
+      │ 
+      │ TIMESTAMP_TOLERANCE = 300  # 5분
+      │ 
+      │ def verify_timestamp(timestamp_str: str) -> bool:
+      │     try:
+      │         ts = int(timestamp_str)
+      │ ... (이하 생략)
+      └───────────────────┘
+
+  [동적 분석 — 취약점]
+    🔴 replay           HIGH   | 만료 요청 시험 — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+    🔴 replay           HIGH   | 본문·서명 유지 후 시간 헤더만 갱신 — 정책 위반 처리 증거 확인
+       HTTP 200
+       시험 주문 상태 변경 확인
+
+  [동적 분석 — 거부·관측·미완료]
+    [rejected] downgrade        | 서명 정책 시험(sha1) — 시험 요청 거부 관측
+    [rejected] downgrade        | 서명 정책 시험(md5) — 시험 요청 거부 관측
+    [rejected] downgrade        | 서명 정책 시험(missing_signature) — 시험 요청 거부 관측
+    [observed] type_confusion   | 입력 형식 시험(text_plain) — 수락 관측, 추가 검토 필요
+    [observed] type_confusion   | 입력 형식 시험(array_body) — 수락 관측, 추가 검토 필요
+
+──────────────────────────────────────────────────────────────────────
+  ⚪ /webhook/secure
+  등급: INFO | 참고 위험도: 0.0 | Tier 1
+  동적분석 신뢰도: Tier 1 — 상태 교차 검증 가능 (공격 전후 DB 상태 비교)
+
+  [동적 분석 — 거부·관측·미완료]
+    [rejected] downgrade        | 서명 정책 시험(sha1) — 시험 요청 거부 관측
+    [rejected] downgrade        | 서명 정책 시험(md5) — 시험 요청 거부 관측
+    [rejected] downgrade        | 서명 정책 시험(missing_signature) — 시험 요청 거부 관측
+    [rejected] replay           | 만료 요청 시험 — 시험 요청 거부 관측
+    [rejected] replay           | 본문·서명 유지 후 시간 헤더만 갱신 — 시험 요청 거부 관측
+    [rejected] type_confusion   | 입력 형식 시험(text_plain) — 시험 요청 거부 관측
+    [rejected] type_confusion   | 입력 형식 시험(array_body) — 시험 요청 거부 관측
+
+======================================================================
+  리포트 끝
+======================================================================
+
+
+  ──────────────────────────────────────────────────────────
+  리포트 검증
+  ──────────────────────────────────────────────────────────
+  ✅ 전체 등급 F (CRITICAL 존재)
+  ✅ SAST 7건
+  ✅ DAST 15건
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  최종 결과
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  🎉 전체 파이프라인 통과!
+

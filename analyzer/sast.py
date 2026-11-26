@@ -369,6 +369,18 @@ class SASTEngine:
             fix = FIX_SNIPPETS["WHSEC-004-header"].format(
                 ts_header=ts_header, ts_var=ts_var,
             )
+        if ts_header.lower() == "tosspayments-webhook-transmission-time":
+            read_time = "" if is_param else f'{ts_var} = request.headers.get("{ts_header}")\n'
+            fix = ("# 토스 전송 시각은 ISO 8601 문자열입니다.\n"
+                   "import time\nfrom datetime import datetime\n"
+                   + read_time
+                   + f"try:\n    sent_at = datetime.fromisoformat({ts_var}.replace('Z', '+00:00'))\n"
+                     "    if sent_at.tzinfo is None:\n        raise ValueError('timezone required')\n"
+                     "except (ValueError, TypeError, AttributeError):\n"
+                     "    raise HTTPException(status_code=401, detail='전송 시각 형식 오류')\n"
+                     "if abs(time.time() - sent_at.timestamp()) > 300:\n"
+                     "    raise HTTPException(status_code=401, detail='요청이 만료되었습니다.')\n"
+                     "# 서명은 raw body + ':' + 원본 전송 시각 문자열로 별도 검증하세요.\n")
         return [Finding(
             rule_id="WHSEC-004",
             rule_name="타임스탬프 검증 누락",

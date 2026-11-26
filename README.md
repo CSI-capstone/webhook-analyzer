@@ -10,6 +10,21 @@ Python 소스코드를 AST로 분석하는 **정적 분석 5개 규칙**과, 별
 
 상세 변경 내용과 수정 전후 예시는 [코드 보완 설명](docs/CODE_CHANGES.md), 화면 구성과 시연 순서는 [UI 개편 설명](docs/UI_CHANGES.md)을 참고하세요.
 
+## 목차
+
+- [실행 환경](#실행-환경)
+- [프로젝트 구조](#프로젝트-구조)
+- [시연 가이드 (Web UI)](#시연-가이드-web-ui)
+- [시연 서버별 실행 및 설정](#시연-서버별-실행-및-설정)
+- [테스트](#테스트)
+- [파일별 역할 상세 설명](#파일별-역할-상세-설명)
+- [동적 분석 결과 해석](#동적-분석-결과-해석)
+- [상태 조회 인터페이스 (Tier 1)](#상태-조회-인터페이스-tier-1)
+- [플랫폼 지원 범위](#플랫폼-지원-범위)
+- [분석 파이프라인 흐름](#분석-파이프라인-흐름)
+- [현재 제한 사항](#현재-제한-사항)
+- [실행 방법 요약](#실행-방법-요약)
+
 ---
 
 ## 실행 환경
@@ -47,7 +62,9 @@ webhook-analyzer-main/
 ├── README.md
 ├── main.py                        # CLI 진입점
 ├── app.py                         # Web UI / REST API 서버 (FastAPI)
+├── run_exhibition.py              # 분석 UI + 시연 서버 일괄 실행
 ├── requirements.txt
+├── EXHIBITION_DEMOS.md            # 추가 시연 서버·쇼핑몰 사용 안내
 │
 ├── analyzer/                      # 핵심 분석 패키지
 │   ├── engine.py                  # AST 파싱 + 핸들러·라우트·import 추출
@@ -71,7 +88,12 @@ webhook-analyzer-main/
 │   └── __init__.py
 │
 ├── samples/
-│   ├── shop_server.py             # 단국 굿즈샵 — 일반 HMAC 모의 결제 서버
+│   ├── shop_server.py             # 주 시연: 단국 굿즈샵 — 토스 서명 형식
+│   ├── stripe_demo_server.py      # Stripe 형식 — 취약 / 보완 경로 비교
+│   ├── slack_demo_server.py       # Slack 형식 — 팀 굿즈 주문 알림 비교
+│   ├── generic_shop_server.py     # 선택 시연: 사용자 정의 HMAC 형식
+│   ├── demo_ui.py                 # 공통 쇼핑몰·모의 결제·웹훅 전송 기능
+│   ├── demo_web/                  # 쇼핑몰 HTML·CSS·JavaScript·상품 이미지
 │   ├── vulnerable_webhook.py      # SAST 규칙 검증용 취약 핸들러
 │   ├── secure_webhook.py          # 지원하는 방어 패턴의 미탐지 확인용 예제
 │   ├── utils_vulnerable.py        # 외부 파일 위임 결함 예제
@@ -85,7 +107,11 @@ webhook-analyzer-main/
 │   ├── test_api_pipeline.py       # API 분석 함수·다중 파일·코드 문맥 검사
 │   ├── test_http_api.py           # 실제 ASGI·multipart·샘플 수신 서버 검사
 │   ├── test_cli.py                # CLI 입력 검증·종료 코드 검사
+│   ├── test_toss_shop.py          # 토스 서명·다중 서명·기본 쇼핑몰 회귀 검사
+│   ├── test_exhibition_demos.py   # Stripe·Slack 취약 / 보완 경로 검사
+│   ├── test_storefronts.py        # 네 쇼핑몰의 주문·모의 결제·상태 변경 검사
 │   ├── check_frontend.cjs         # JavaScript 렌더링·입력·결과 표시 검사
+│   ├── check_storefront.cjs       # 쇼핑몰 장바구니·결제·시험 조작 검사
 │   └── __init__.py
 │
 └── docs/
@@ -105,18 +131,18 @@ webhook-analyzer-main/
 
 ```bash
 # 터미널 1
-uvicorn samples.shop_server:app --port 8000 --reload
+python -m uvicorn samples.shop_server:app --port 8000 --reload
 ```
 
 단국 굿즈샵 모의 서버가 `http://127.0.0.1:8000`에서 실행됩니다.
 
-이 샘플은 **사용자 정의 HMAC 프로토콜을 사용하는 모의 결제 서버**입니다. 경로와 시크릿 이름에 `toss`가 남아 있지만 실제 토스페이먼츠 결제 API와 연동하는 예제는 아닙니다. 서명 헤더는 `X-Signature`를 사용합니다.
+이 샘플은 **토스페이먼츠 웹훅 서명 형식을 구현한 로컬 모의 결제 서버**입니다. `TossPayments-Webhook-Signature`와 전송 시간 헤더를 사용하며, 실제 토스페이먼츠 결제 API에는 연결하지 않습니다. 상품 선택·장바구니·주문·모의 결제를 쇼핑몰 화면에서 진행할 수 있습니다.
 
 ### 2단계 — HookLens 서버 실행
 
 ```bash
 # 터미널 2
-uvicorn app:app --port 8001 --reload
+python -m uvicorn app:app --port 8001 --reload
 ```
 
 ### 3단계 — 브라우저에서 분석 실행
@@ -135,6 +161,8 @@ uvicorn app:app --port 8001 --reload
 
 **시연 설정** 버튼을 누르면 위 설정값이 채워집니다. 파일 선택, 수신 서버 실행, 분석 시작은 별도로 진행해야 합니다.
 
+실행 중인 서버와 **같은 프로젝트 폴더의 소스 파일**을 업로드하세요. 예전 일반 HMAC 버전의 `shop_server.py`를 현재 토스 형식 서버와 함께 사용하면 서명 형식이 달라 정상 요청도 실패할 수 있습니다. 다른 서버를 분석할 때는 아래 [서버별 설정표](#시연-서버별-실행-및-설정)에 맞춰 파일·URL·시크릿을 함께 변경합니다.
+
 > 시크릿 키는 샘플의 `dku-toss-secret-2026`과 일치해야 합니다. 다른 키를 입력하면 정상 서명 기준 요청이 실패하고 동적 시험은 `inconclusive`로 표시됩니다. 키를 비우면 정상 서명이 필요한 시험은 `skipped`로 표시됩니다. 이 값은 공개된 시연용 예시 키입니다.
 
 ### 4단계 — 결과 확인
@@ -144,6 +172,8 @@ uvicorn app:app --port 8001 --reload
 - **수정 가이드**: 탐지 위치의 주변 코드, 수정 참고 코드, 관련 문서를 확인합니다.
 - **내보내기**: JSON 다운로드 또는 전체 결과 인쇄를 사용할 수 있습니다.
 
+현재 `shop_server.py`의 기본 시연에서는 **토스페이먼츠로 감지**, 서명 누락·잘못된 서명은 **HTTP 401**, 정상 서명 기준은 **HTTP 200**이 예상됩니다. 정적 위험 징후는 2건이고, 동적 시험에서는 만료 요청의 처리 증거 1건을 확인합니다. 동적 시험 탭의 하위 시험 6건은 서로 다른 요청 변형의 수이며, 취약 처리 증거가 6건이라는 뜻은 아닙니다.
+
 WHSEC-002는 일반 비교 패턴을 정적으로 탐지한 결과입니다. 현재 DAST에는 네트워크 시간 측정으로 시크릿을 복구하는 타이밍 공격 시험이 없습니다.
 
 ### 정적 분석만 실행하려면
@@ -152,7 +182,91 @@ UI에서 **정적 분석만**을 선택합니다. API는 `sast_only=true`이거�
 
 ---
 
-## 통합 테스트
+## 시연 서버별 실행 및 설정
+
+**기본 시연은 `shop_server.py`**를 사용합니다. Stripe·Slack은 서명 형식과 보완 전후 차이를 보여주는 추가 시연이고, Generic은 사용자 정의 HMAC을 비교할 때 선택합니다. 시연 대상은 총 4개이며 HookLens 분석 UI는 별도 서버입니다.
+
+### 실행 명령
+
+모든 명령은 프로젝트 루트에서 실행합니다. 필요한 서버만 개별 실행하거나, 다음 명령으로 분석 UI와 네 시연 서버를 한 번에 실행할 수 있습니다.
+
+```bash
+python run_exhibition.py
+
+# Generic을 제외하고 분석 UI + 토스·Stripe·Slack만 실행
+python run_exhibition.py --without-generic
+```
+
+두 명령 중 하나를 선택합니다. 일괄 실행은 `Ctrl+C`로 함께 종료하며, 사용할 포트가 이미 점유되어 있으면 시작하지 않습니다. 개별 실행해 둔 서버가 있다면 종료한 뒤 사용하세요.
+
+| 대상 / 업로드할 소스 파일 | 개별 실행 명령 |
+|---|---|
+| 기본 · `samples/shop_server.py` | `python -m uvicorn samples.shop_server:app --port 8000` |
+| Stripe · `samples/stripe_demo_server.py` | `python -m uvicorn samples.stripe_demo_server:app --port 8002` |
+| Slack · `samples/slack_demo_server.py` | `python -m uvicorn samples.slack_demo_server:app --port 8003` |
+| Generic · `samples/generic_shop_server.py` | `python -m uvicorn samples.generic_shop_server:app --port 8004` |
+| HookLens 분석 UI · 업로드 대상 아님 | `python -m uvicorn app:app --port 8001` |
+
+### 분석 입력값과 웹훅 경로
+
+| 시연 대상 | 쇼핑몰 주소 / 분석에 입력할 웹훅 URL | 시크릿 키 | 취약 예제 웹훅 경로 |
+|---|---|---|---|
+| 토스 · DKU GOODS | `http://127.0.0.1:8000` | `dku-toss-secret-2026` | `/webhook/toss-payment` |
+| Stripe · FORM & FIELD | `http://127.0.0.1:8002` | `stripe-demo-secret-2026` | `/webhook/stripe` |
+| Slack · COMMON TEAM | `http://127.0.0.1:8003` | `slack-demo-secret-2026` | `/webhook/slack` |
+| Generic · NEIGHBOR STORE | `http://127.0.0.1:8004` | `generic-demo-secret-2026` | `/webhook/generic-payment` |
+
+분석 URL에는 **포트까지의 기본 주소**를 입력합니다. 웹훅 경로는 업로드한 코드에서 추출합니다. 표의 키는 각 파일의 `WEBHOOK_SECRET`에 있는 공개된 로컬 시연용 값입니다.
+
+| 공통 설정 | 입력값 / 의미 |
+|---|---|
+| 상태 생성 경로 | `/orders` |
+| 상태 조회 경로 | `/orders/{id}` — 실제 서버 인자는 `order_id`이며 분석기에는 `{id}`로 입력 |
+| 타임스탬프 허용 시간 | `300`초 — 기본 만료 시험은 360초 전 요청 |
+| JSON 객체 전용 정책 | 기본 시연에서는 선택하지 않음 |
+
+Stripe에는 `/webhook/stripe-fixed`, Slack에는 `/webhook/slack-fixed` 보완 경로가 같은 서버 안에 있습니다. 해당 소스 파일을 분석하면 취약·보완 경로를 함께 확인할 수 있습니다. 보완 경로는 정상 서명을 수락하고 허용 시간을 벗어난 요청을 거부하도록 구성했습니다.
+
+### 서버별 예상 결과
+
+현재 샘플과 기본 허용 시간 300초를 기준으로 합니다. 만료 요청은 **360초 전 시간값을 포함해 올바른 시크릿으로 서명한 요청**이며, 각 요청은 연결된 새 시험 주문을 사용합니다. 모든 경로에서 정상 서명 요청은 HTTP 200, 서명 누락·잘못된 서명은 HTTP 401이 예상됩니다.
+
+| 대상 / 경로 | 정적 분석 예상 | 만료 요청의 응답·주문 상태 |
+|---|---|---|
+| 토스 · `/webhook/toss-payment` | WHSEC-002 / HIGH, WHSEC-004 / MEDIUM | HTTP 200 · `paid`로 변경 |
+| Stripe · `/webhook/stripe` | WHSEC-004 / MEDIUM | HTTP 200 · `paid`로 변경 |
+| Stripe 보완 · `/webhook/stripe-fixed` | 위험 징후 미탐지 | HTTP 401 · `pending` 유지 |
+| Slack · `/webhook/slack` | WHSEC-002 / HIGH, WHSEC-004 / MEDIUM | HTTP 200 · 알림 처리 상태가 `processed`로 변경 |
+| Slack 보완 · `/webhook/slack-fixed` | 위험 징후 미탐지 | HTTP 401 · `pending` 유지 |
+| Generic · `/webhook/generic-payment` | WHSEC-002 / HIGH, WHSEC-004 / MEDIUM | HTTP 200 · `paid`로 변경 |
+
+Stripe·Slack 파일은 취약·보완 경로를 함께 포함하므로 **보완 경로가 정상이어도 파일 전체가 A 등급이 되지는 않습니다.** 엔드포인트를 선택해 각 경로의 결과를 비교하세요. 일반 서명 비교의 정적 탐지는 타이밍 공격 성공을 입증한 결과와 구분합니다.
+
+### 쇼핑몰에서 직접 확인하기
+
+각 주소에서 상품을 장바구니에 담고 시연용 주문자·배송 정보를 입력한 뒤 모의 결제를 진행합니다. 실제 계정이나 카드 정보는 필요하지 않습니다. 상품 가격과 배송비는 서버에서 계산하고, 모의 결제·시험 전송은 같은 서버의 웹훅 핸들러를 호출해 처리 결과를 표시합니다.
+
+시험 콘솔에서 새 시험 주문을 만든 뒤 정상·만료·잘못된 서명·서명 누락 요청을 비교할 수 있습니다. Stripe·Slack은 보완 경로도 선택할 수 있습니다. Slack 시연의 서명 검증 대상은 **주문 알림 이벤트**이며, 알림 수신을 실제 결제 승인으로 취급하지 않습니다.
+
+`GET /demo/state`가 약 2.5초 간격으로 기록되는 것은 화면의 주문·시험 결과를 갱신하는 조회입니다. 이 요청 자체가 주문이나 결제를 반복 생성하지는 않습니다. 주문 상태는 메모리에 보관하므로 서버를 재시작하면 초기화됩니다.
+
+자세한 시연 순서는 [추가 시연 안내](EXHIBITION_DEMOS.md)를 참고하세요.
+
+### 시연 중 문제 확인
+
+| 상황 | 확인할 내용 / 조치 |
+|---|---|
+| 정상 서명 기준 요청도 HTTP 401 | 업로드 파일·수신 서버가 같은 버전인지, 해당 서버의 시크릿·URL을 입력했는지 확인 |
+| 서버에 연결되지 않음 | 수신 서버 실행 여부와 포트 확인. 분석 UI의 8001이 아닌 시연 대상의 포트를 입력 |
+| 상태 조회가 되지 않거나 Tier 2로 표시 | 상태 생성 `/orders`, 조회 `/orders/{id}` 설정과 해당 서버의 상태 API 응답 확인 |
+| 쇼핑몰에서 재시험 시 HTTP 409 | 이미 처리한 주문이므로 시험 콘솔의 **매번 새 시험 주문 사용**을 선택해 다시 전송 |
+| 외부 함수 소스 미확인 INFO | 보조 Python 파일을 같은 폴더 구조로 포함한 ZIP을 업로드 |
+
+---
+
+## 테스트
+
+### 전체 파이프라인 통합 테스트
 
 전체 파이프라인(SAST → DAST → 등급 결정)의 동작을 자동으로 검증합니다. **서버를 미리 실행할 필요가 없습니다.** 테스트 수신 서버는 사용 가능한 로컬 포트로 자동 기동되고, 검사가 끝나면 종료됩니다.
 
@@ -171,10 +285,25 @@ python tests/test_integration.py
 
 모든 단계 통과 시 `🎉 전체 파이프라인 통과!`가 출력되고 종료 코드 0을 반환합니다.
 
+### 테스트 파일과 확인 범위
+
+| 파일 | 확인 범위 |
+|---|---|
+| `tests/test_integration.py` | 예제 SAST → 자동 기동한 수신 서버 → Probe·DAST → 통합 등급을 연결하는 전체 파이프라인 |
+| `tests/test_regressions.py` | 검증 분기·해시 별칭·다중 서명 등 정적 분석 반례, 동적 판정, 플랫폼 서명, 등급, ZIP 처리 |
+| `tests/test_api_pipeline.py` | 분석 API 함수의 다중 파일·외부 함수 결과 연결·핸들러별 플랫폼·원본 코드 문맥 |
+| `tests/test_http_api.py` | 실제 ASGI·multipart·ZIP 업로드와 Uvicorn 수신 서버, 정상 키·잘못된 키 분석 |
+| `tests/test_cli.py` | CLI 입력 오류와 분석 결과에 따른 종료 코드 |
+| `tests/test_toss_shop.py` | 토스 정상·다중 서명, 누락·변조·기존 Generic 서명 거부, 의도한 만료 검사 누락, 플랫폼 감지·수정 예제 |
+| `tests/test_exhibition_demos.py` | Stripe·Slack의 정상·변조·만료·미래 요청, 보완 경로의 거부, 실제 수신 서버와 업로드 소스의 분석 결과 일치 |
+| `tests/test_storefronts.py` | 네 쇼핑몰의 화면·자산, 서버 가격 계산·입력 검증, 모의 결제와 실제 핸들러 상태 변경, 중복 결제·금액 불일치 거부 |
+| `tests/check_frontend.cjs` | 분석 UI의 JavaScript 렌더링·입력 검증·결과 상태·escaping·출력 |
+| `tests/check_storefront.cjs` | 쇼핑몰 JavaScript의 상품·장바구니·주문·모의 결제·시험 조작과 보완 경로 선택 |
+
 ### 단위·회귀·HTTP·프런트엔드 검사
 
 ```bash
-# 실제 ASGI/HTTP 검사까지 실행하려면 추가 설치
+# 아래 Python 검사 전체 실행에 필요한 테스트 의존성
 python -m pip install httpx
 
 # Python 단위·회귀·API·CLI 검사
@@ -182,13 +311,20 @@ python -m unittest discover -s tests -v
 
 # 선택 사항: Node.js가 설치되어 있을 때 실행
 node tests/check_frontend.cjs
+node tests/check_storefront.cjs
 ```
 
-- Python 단위·회귀 테스트는 표준 `unittest`를 사용합니다.
-- `test_http_api.py`의 6개 검사는 프로젝트 의존성과 `httpx`가 있을 때 실행됩니다. 의존성이 없으면 해당 검사들은 생략됩니다.
+- Python 단위·회귀 테스트는 표준 `unittest`를 사용합니다. `test_integration.py`는 위의 별도 명령으로 실행하며 `unittest discover`만으로 실행되지 않습니다.
+- 추가된 쇼핑몰·서명 테스트는 FastAPI `TestClient`를 사용하므로 프로젝트 의존성과 `httpx`를 먼저 설치합니다. `test_http_api.py` 자체는 의존성이 없을 때 검사를 생략하도록 되어 있습니다.
 - `test_api_pipeline.py`는 FastAPI가 없으면 선언 인터페이스 대역으로 분석 함수를 검사합니다. 이 방식은 실제 ASGI/HTTP 라우팅 검증을 대신하지 않습니다.
-- Node.js는 프런트엔드 검사에만 필요하며, HookLens 자체 실행에는 필요하지 않습니다.
+- 두 Node.js 검사는 DOM 대역으로 JavaScript 동작을 확인합니다. 실제 브라우저의 배치·시각적 완성도 검사는 별도로 진행해야 합니다. Node.js는 이 검사에만 필요하며 HookLens 자체 실행에는 필요하지 않습니다.
 - ZIP에 포함된 과거 검증 결과와 실행 환경은 `docs/CODE_CHANGES.md`, `docs/UI_CHANGES.md`, `docs/verification/`에 기록되어 있습니다.
+
+시연 서버 관련 검사만 골라 실행하려면 다음 명령을 사용합니다.
+
+```bash
+python -m unittest tests.test_toss_shop tests.test_exhibition_demos tests.test_storefronts -v
+```
 
 ---
 
@@ -304,12 +440,12 @@ uvicorn app:app --reload --port 8001
 
 **정적 분석(SAST) 엔진.** `ParseResult`에 5개 규칙을 적용해 `Finding`을 생성합니다.
 
-| 규칙 ID | 점검 내용 | 코드에 설정된 심각도 / 참고 위험도 | 해석 |
+| 규칙 ID | 점검 내용 | 위험 등급 | 해석 |
 |---|---|---|---|
-| WHSEC-001 | 서명 검증 누락 또는 검증 확인 불가 | CRITICAL / 9.8, 추적 불가 시 INFO | 서명 비교 결과로 처리를 제한하는 지원 패턴을 찾는지 확인 |
-| WHSEC-002 | 서명 일반 비교 사용 | HIGH / 7.4 | 서명 관련 값의 `==`·`!=` 비교를 탐지하고 `hmac.compare_digest` 사용 권고 |
-| WHSEC-003 | 레거시 HMAC 알고리즘 | MEDIUM / 6.5 | HMAC-SHA1·MD5 사용 탐지 및 SHA256 전환 정책 검토 |
-| WHSEC-004 | 수신 시간값 검증 누락 | MEDIUM / 5.9 | 서명·시간값 수신 패턴이 있을 때 만료 검사 여부 확인 |
+| WHSEC-001 | 서명 검증 누락 또는 검증 확인 불가 | CRITICAL, 추적 불가 시 INFO | 서명 비교 결과로 처리를 제한하는 지원 패턴을 찾는지 확인 |
+| WHSEC-002 | 서명 일반 비교 사용 | HIGH | 서명 관련 값의 `==`·`!=` 비교를 탐지하고 `hmac.compare_digest` 사용 권고 |
+| WHSEC-003 | 레거시 HMAC 알고리즘 | MEDIUM | HMAC-SHA1·MD5 사용 탐지 및 SHA256 전환 정책 검토 |
+| WHSEC-004 | 수신 시간값 검증 누락 | MEDIUM | 서명·시간값 수신 패턴이 있을 때 만료 검사 여부 확인 |
 | WHSEC-005 | 외부 검증 함수 내부 결함 / 소스 미확인 | 내부 결함에 따라 HIGH·MEDIUM, 추적 불가 시 INFO | 외부 함수의 일반 비교·레거시 HMAC 결함을 추적 |
 
 - 수정 권고(`recommendation`)와 수정 참고 코드(`fix_snippet`)를 제공합니다. 추적 불가 INFO에는 코드 예제가 없을 수 있습니다.
@@ -319,7 +455,7 @@ uvicorn app:app --reload --port 8001
 - 동적 import 안내 `WHSEC-DYN`은 보조 INFO이며 여섯 번째 보안 규칙이 아닙니다.
 - 규칙은 공통으로 적용하지만, 실제 방어 요구와 수정 방식은 플랫폼별 명세를 함께 확인해야 합니다.
 
-참고 위험도 숫자는 환경별 CVSS 벡터를 산출한 공식 CVSS 점수가 아닙니다. HMAC-MD5 사용 탐지만으로 실제 서명 위조 성공을 입증한 것으로 해석하지 않습니다.
+이 문서는 숫자 점수 대신 **위험 등급과 확인된 근거**로 결과를 설명합니다. INFO는 추가 확인 안내이며 취약점 확정을 뜻하지 않습니다. HMAC-MD5 사용 탐지만으로 실제 서명 위조 성공을 입증한 것으로 해석하지 않습니다.
 
 #### `analyzer/dast.py`
 
@@ -377,8 +513,8 @@ Tier는 수신 서버의 상태 API를 실제로 사용할 수 있는지에 따�
 - SAST의 가장 높은 심각도와 DAST에서 확인한 처리 증거를 등급에 반영합니다.
 - 관련 규칙 ID가 겹칠 때만 같은 점검 항목의 정적·동적 교차 확인으로 표시합니다.
 - `observed`, `inconclusive`, `skipped` 또는 INFO 안내가 남으면 부분 분석 상태를 표시합니다.
-- 참고 점수는 SAST 결과 중 최댓값을 사용하며, 정적·동적 교차 탐지를 이유로 0.5점을 더하거나 점수를 합산하지 않습니다.
-- DAST 단독 처리 증거도 위험 등급에 반영하되, 근거 없는 숫자 CVSS 점수를 생성하지 않습니다.
+- 정적·동적 교차 확인은 증거의 연결로 표시하며, 중복 탐지를 별도의 가산점으로 해석하지 않습니다.
+- DAST 단독 처리 증거도 위험 등급에 반영합니다. 등급과 함께 기준 요청의 성립 여부·상태 변경·미완료 항목을 확인해야 합니다.
 
 **전체 등급 기준:**
 
@@ -397,7 +533,7 @@ Tier는 수신 서버의 상태 API를 실제로 사용할 수 있는지에 따�
 
 | 클래스 | 설명 |
 |---|---|
-| `EndpointReport` | 한 엔드포인트의 SAST·DAST 결과, 심각도, 참고 위험도, 분석 상태 |
+| `EndpointReport` | 한 엔드포인트의 SAST·DAST 결과, 위험 등급, 처리 증거, 분석 상태 |
 | `FullReport` | 전체 등급, 정적 탐지·동적 처리 증거·관측·판단 불가·생략 건수 |
 
 #### `analyzer/serializer.py`
@@ -470,7 +606,7 @@ Tier는 수신 서버의 상태 API를 실제로 사용할 수 있는지에 따�
 | `POST /webhook/weak-hash-md5` | 정상 SHA256과 레거시 MD5를 함께 허용하는 정책 결함 |
 | `POST /webhook/no-timestamp` | 서명은 검사하지만 수신 시간 만료를 검사하지 않음 |
 | `POST /webhook/stripe` | Stripe 형식 서명을 검사하지만 시간 만료 미검증 |
-| `POST /webhook/toss` | 모의 지급 이벤트 서명 일반 비교 및 시간 만료 미검증 |
+| `POST /webhook/toss` | 토스 형식 모의 이벤트의 서명 일반 비교 및 시간 만료 미검증 |
 | `POST /webhook/slack` | Slack 형식 서명을 검사하지만 시간 만료 미검증 |
 | `POST /webhook/portone` | 서명 헤더 존재만 검사하고 서명값은 검증하지 않음 |
 
@@ -488,16 +624,32 @@ Tier는 수신 서버의 상태 API를 실제로 사용할 수 있는지에 따�
 
 #### `samples/shop_server.py` — 주 시연 대상
 
-**단국 굿즈샵 — 일반 HMAC 모의 결제 서버.** 개발자가 구현한 웹훅 핸들러를 배포 전에 점검하는 상황을 가정합니다.
+**단국 굿즈샵 — 토스 서명 형식의 모의 결제 서버.** 개발자가 구현한 웹훅 핸들러를 배포 전에 점검하는 상황을 가정합니다.
 
-상품 목록·주문 생성·주문 조회·결제 웹훅을 제공하며, 주문 상태는 메모리에 저장합니다. `/webhook/toss-payment` 경로를 사용하지만 실제 결제 제공자 연동은 하지 않습니다.
+상품·장바구니·주문·모의 결제 화면과 주문 상태 API를 제공합니다. `raw body + ':' + 전송 시간`을 HMAC-SHA256으로 서명하고, `TossPayments-Webhook-Signature: v1:<Base64>`를 검증합니다. 여러 서명 중 유효한 값이 있으면 수락하는 형태이며 실제 결제 제공자에는 연결하지 않습니다.
 
 | 의도한 정적 탐지 | 내용 |
 |---|---|
 | WHSEC-002 / HIGH | 서명 비교에 `==` 사용. 타이밍 노출 가능성 검토 |
-| WHSEC-004 / MEDIUM | `x-timestamp` 헤더를 읽지만 만료 검사 미수행 |
+| WHSEC-004 / MEDIUM | `TossPayments-Webhook-Transmission-Time`을 서명에 포함하지만 만료 검사 미수행 |
 
 Content-Type과 JSON 객체 여부를 검사하므로 기본 시연에서는 입력 형식 시험이 거부되고, 만료 요청의 처리 증거를 확인하는 데 활용할 수 있습니다.
+
+#### `samples/stripe_demo_server.py`
+
+**Stripe 서명 형식 비교 예제.** `Stripe-Signature`의 시간값과 본문을 함께 검증합니다. `/webhook/stripe`는 시간 만료 검사가 없고, `/webhook/stripe-fixed`는 `compare_digest`와 시간 검사를 적용합니다. 같은 서버에서 만료 요청의 수락·거부 차이를 보여줍니다.
+
+#### `samples/slack_demo_server.py`
+
+**Slack 주문 알림 수신 비교 예제.** `X-Slack-Signature`와 `X-Slack-Request-Timestamp`를 사용합니다. `/webhook/slack`에는 일반 서명 비교·만료 검사 누락이 있고, `/webhook/slack-fixed`는 두 부분을 보완합니다. 쇼핑몰 화면의 모의 결제와 알림 이벤트 처리는 구분해 표시합니다.
+
+#### `samples/generic_shop_server.py`
+
+**사용자 정의 HMAC 비교 예제.** `X-Signature: sha256=<hex>`로 본문만 서명하며, `X-Timestamp`를 서명에 묶거나 만료 검사에 사용하지 않습니다. 일반 서명 비교와 시간 검증 누락을 포함합니다. 기본 토스 시연과 별개로 일반 HMAC 형식을 비교할 때 사용합니다.
+
+#### `samples/demo_ui.py` / `samples/demo_web/`
+
+**네 시연 서버가 공유하는 쇼핑몰 기능과 화면 자산.** 서버별 상품·디자인을 적용하고, 장바구니 주문·서버 가격 계산·모의 결제·웹훅 시험 전송·결과 조회를 제공합니다. 시연용 서명 생성은 서버에서 수행합니다. 일괄 실행용 `run_exhibition.py`와 서버별 주소·키·경로는 위 [시연 서버별 실행 및 설정](#시연-서버별-실행-및-설정)을 참고하세요.
 
 #### `samples/vulnerable_webhook.py`
 
@@ -528,19 +680,7 @@ SAST의 위험 징후 미탐지 여부를 확인하는 예제이며, 임의의 P
 
 ### `tests/`
 
-#### `tests/test_integration.py`
-
-**전체 파이프라인 E2E 통합 테스트.** 예제 SAST, 로컬 수신 서버, Probe, DAST, 플랫폼별 서명 처리와 통합 등급을 연결해 확인합니다. 실행 방법은 위 [통합 테스트](#통합-테스트)를 참고하세요.
-
-**추가 테스트 파일:**
-
-| 파일 | 검증 범위 |
-|---|---|
-| `test_regressions.py` | 검증 누락·이름만 있는 검증 함수·해시 별칭 등 반례, 동적 판정, 서명, 등급, ZIP 처리 |
-| `test_api_pipeline.py` | 분석 API 함수의 다중 파일·외부 결과 연결·플랫폼 분리·원본 코드 문맥 |
-| `test_http_api.py` | 실제 FastAPI ASGI·multipart·ZIP 업로드, Uvicorn 샘플 수신 서버, 정상 키·잘못된 키 결과 |
-| `test_cli.py` | 입력 오류 및 분석 결과에 따른 CLI 종료 코드 |
-| `check_frontend.cjs` | 실제 JavaScript 렌더링 함수·입력 검증·결과 상태·escaping·출력 |
+**분석기와 시연 서버의 자동 검사.** 전체 파이프라인, 정적·동적 판정 회귀, API·CLI, 토스·Stripe·Slack 서명과 쇼핑몰 주문 흐름을 확인합니다. 파일별 범위와 실행 명령은 위 [테스트](#테스트)에 모아 두었습니다.
 
 ---
 
@@ -592,15 +732,34 @@ DAST가 처리 효과를 관측하려면 수신 서버가 다음 인터페이스
 | GitHub | `X-Hub-Signature-256: sha256=<hex>` | raw body의 HMAC-SHA256. 이벤트·전달 ID 헤더 포함 |
 | Stripe | `Stripe-Signature: t=<ts>,v1=<hex>` | `ts.body`의 HMAC-SHA256 |
 | Slack | `X-Slack-Signature: v0=<hex>` | `v0:ts:body`의 HMAC-SHA256. `X-Slack-Request-Timestamp` 포함 |
-| 토스페이먼츠 | `TossPayments-Webhook-Signature: v1:<Base64>` | 서명이 제공되는 `payout.changed` 모의 이벤트. `body:transmission-time` 서명, 전송 시간·ID 헤더 포함 |
+| 토스페이먼츠 | `TossPayments-Webhook-Signature: v1:<Base64>` | `PAYMENT_STATUS_CHANGED` 모의 이벤트. `body:transmission-time` 서명, 전송 시간·ID 헤더 포함 |
 | PortOne V2 | `webhook-signature: v1,<Base64>` | Standard Webhooks 형식. Base64 디코딩 키로 `id.ts.body` 서명, `webhook-id`·`webhook-timestamp` 포함 |
-| Generic | 감지한 일반 서명 헤더, 기본 `sha256=<hex>` | 사용자 정의 HMAC 시험. 시연 쇼핑몰은 `X-Signature` 사용 |
+| Generic | 감지한 일반 서명 헤더, 기본 `sha256=<hex>` | 사용자 정의 HMAC 시험. `generic_shop_server.py`는 `X-Signature` 사용 |
 
 - PortOne에는 `whsec_...` 또는 Base64 시크릿을 입력합니다. 원문 키 문자열과 인코딩된 키를 혼동하지 않아야 합니다.
-- 토스 일반 결제 `PAYMENT_STATUS_CHANGED`에는 위 지급 이벤트의 서명 정책을 일괄 적용하지 않습니다. 일반 결제의 결제 조회 API 검증은 현재 자동 점검 범위 밖입니다.
+- 토스 시연은 위 형식으로 서명한 로컬 결제 상태 이벤트를 사용합니다. 실제 결제 승인·결제 조회 API와의 대조는 현재 자동 점검 범위 밖입니다.
 - GitHub 시간 기반 재전송 시험은 생략합니다. 전달 ID 중복 처리·멱등성은 별도로 검토해야 합니다.
 - 한 번의 분석에는 시크릿 하나를 사용합니다. 플랫폼별 실제 키가 다르면 나누어 분석해야 합니다.
 - 모의 이벤트와 업무 스키마가 다르면 정상 서명 기준 요청이 실패할 수 있으며, 이때는 안전 판정을 내리지 않습니다.
+
+---
+
+## 분석 파이프라인 흐름
+
+```mermaid
+flowchart TD
+    input["입력: Python 코드 / 선택한 서버 설정"] --> parse["engine.py: AST·핸들러·라우트 추출"]
+    parse --> sast["sast.py + ast_checks.py: 정적 규칙 5개"]
+    parse --> platform["platform.py: 핸들러별 서명 형식 감지"]
+    platform --> dast["dast.py: 정상 요청 기준선 / Probe / 3개 시험군"]
+    sast --> report["report.py: 결과 연결 / 등급 / 분석 상태"]
+    dast --> report
+    report --> cli["CLI: 텍스트 리포트 / 종료 코드"]
+    report --> json["serializer.py: JSON 직렬화"]
+    json --> web["Web UI: 코드 문맥 / 시험 근거 / 수정 가이드"]
+```
+
+위 그림은 모듈 사이의 데이터 흐름입니다. Web UI/API는 업로드 파일을 처리하고, CLI는 지정한 Python 파일을 읽습니다. 정적 분석만 선택하면 DAST 분기를 생략합니다.
 
 ---
 
@@ -610,7 +769,7 @@ DAST가 처리 효과를 관측하려면 수신 서버가 다음 인터페이스
 - 동일 파일 함수 호출은 최대 4단계, 외부 파일은 1단계 범위로 추적합니다. 지원 패턴 밖의 함수·분기는 수동 검토가 필요합니다.
 - `include_router`/Blueprint의 prefix·등록 관계는 자동 합성하지 않습니다. 웹 API에서 중복 경로, 미치환 경로 파라미터, POST 이외 메서드는 자동 동적 시험을 보류합니다.
 - 동적 모의 페이로드와 상태 조회는 정해진 JSON 계약을 사용합니다. 실제 인증·스키마·비동기 처리에 맞춘 조정이 필요할 수 있습니다.
-- `cvss_score`와 `overall_cvss`는 JSON 호환용 키이며, 화면의 숫자는 규칙 참고 위험도입니다. 공식 CVSS 벡터 기반 환경별 평가와 구분해야 합니다.
+- 기존 JSON의 `cvss_score`와 `overall_cvss` 키는 호환을 위해 남아 있습니다. 이 문서에서는 숫자 점수를 제시하지 않으며, 공식 CVSS 평가 대신 위험 등급·처리 증거·분석 상태를 기준으로 해석합니다.
 - ZIP 크기·경로·항목 수 제한은 있지만, 분석 자원의 별도 격리, 분석 API 인증, 다중 사용자 작업 큐, 운영 배포 보안 강화는 현재 범위에 포함하지 않습니다.
 
 ---
@@ -619,11 +778,14 @@ DAST가 처리 효과를 관측하려면 수신 서버가 다음 인터페이스
 
 | 방법 | 명령 |
 |---|---|
-| 시연 서버 실행 | `uvicorn samples.shop_server:app --port 8000 --reload` |
-| Web UI 서버 실행 | `uvicorn app:app --port 8001 --reload` |
+| 분석 UI + 네 시연 서버 일괄 실행 | `python run_exhibition.py` |
+| 기본 토스 시연 서버 실행 | `python -m uvicorn samples.shop_server:app --port 8000 --reload` |
+| Web UI 서버 실행 | `python -m uvicorn app:app --port 8001 --reload` |
 | CLI 정적 분석 | `python main.py --code samples/vulnerable_webhook.py --sast-only` |
 | CLI 통합 분석 | `python main.py --code samples/shop_server.py --url http://127.0.0.1:8000 --secret dku-toss-secret-2026 --state-create /orders --state-query '/orders/{id}'` |
 | 통합 테스트 | `python tests/test_integration.py` |
 | Python 단위·회귀·API·CLI 검사 | `python -m unittest discover -s tests -v` |
-| 선택적 프런트엔드 검사 | `node tests/check_frontend.cjs` |
+| 시연 서버·쇼핑몰 검사 | `python -m unittest tests.test_toss_shop tests.test_exhibition_demos tests.test_storefronts -v` |
+| 선택적 분석 UI 검사 | `node tests/check_frontend.cjs` |
+| 선택적 쇼핑몰 UI 검사 | `node tests/check_storefront.cjs` |
 | 테스트 서버 단독 실행 | `python server/test_server.py` — 기본 포트 9000 |

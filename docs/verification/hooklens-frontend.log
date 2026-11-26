@@ -1,0 +1,4 @@
+Command: node tests/check_frontend.cjs
+PASS: 31 frontend checks (status semantics, escaping, source evidence, filters, guides, print, inputs)
+Branding-only revision: HookLens.
+Changed Python files parsed successfully. All non-document files compared against balanced UI ZIP; only literal brand text and FastAPI title differ.

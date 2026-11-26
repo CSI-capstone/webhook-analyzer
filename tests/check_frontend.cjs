@@ -223,7 +223,52 @@ check(
   printed.includes("修正") === false && printed.includes("수정 가이드"),
   "Print contains guidance",
 );
-check(printed.includes("expired_timestamp"), "Print includes dynamic evidence");
+check(printed.includes("만료된 시간값"), "Print includes readable dynamic evidence");
+const expiredEvidence = {
+  probe: { baseline_valid: true },
+  sast_findings: [finding],
+  dast_results: [{ ...attack("vulnerable"), state_changed: true }],
+};
+check(
+  context.resultExplanation(expiredEvidence).title.includes("만료된 요청도 처리"),
+  "Confirmed expired request explained in plain language",
+);
+check(
+  !context.resultExplanation({ ...expiredEvidence, probe: { baseline_valid: false } }).title.includes("만료된 요청도 처리"),
+  "Failed baseline cannot be presented as confirmed processing",
+);
+check(
+  !context.resultExplanation({ ...expiredEvidence, dast_results: [attack("observed")] }).title.includes("모두 거부"),
+  "Observation cannot become successful defense",
+);
+check(
+  !context.resultExplanation({ ...expiredEvidence, dast_results: [attack("vulnerable")] }).title.includes("만료된 요청도 처리"),
+  "A legacy vulnerable flag without state evidence cannot claim processing",
+);
+check(
+  context.resultExplanation({ sast_findings: [finding], dast_results: [] }).text.includes("동적 시험을 실행하지 않았"),
+  "SAST-only explanation does not claim runtime verification",
+);
+check(
+  context.resultExplanation({ ...expiredEvidence, dast_results: [attack("rejected")] }).title.includes("코드 검토"),
+  "Rejected requests do not hide static findings",
+);
+check(
+  context.resultExplanation({ ...expiredEvidence, sast_findings: [], dast_results: [attack("rejected")] }).title.includes("실행한 시험 요청을 모두 거부"),
+  "Defense statement is limited to completed trials",
+);
+check(
+  context.resultExplanation({ ...expiredEvidence, sast_findings: [], dast_results: [attack("skipped")] }).tone !== "checked",
+  "Skipped trials cannot produce a successful defense explanation",
+);
+const scored = { ...expiredEvidence, overall_severity: "HIGH", overall_cvss: 7.4, path: "/hook", platform: { platform: "Stripe" } };
+check(!context.renderEndpoint(scored, 0).includes("7.4"), "Endpoint hides legacy numeric scores");
+check(!context.renderSAST([{ ...finding, cvss_score: 7.4 }], 0, "Stripe").includes("7.4"), "Static findings display severity without scores");
+check(!context.buildPrintReport({ ...data, endpoints: [scored] }).includes("참고 위험도"), "Print also hides legacy numeric scores");
+check(
+  context.renderProbe({ baseline_valid: true, step1_code: 401, step2_code: 401, step3_code: 200, step4_state_ok: true }).includes("정상적인 거부"),
+  "Probe explains that unauthorized responses to invalid signatures are expected",
+);
 const form = new Map([
   ["webhook_url", "file:///tmp/source"],
   ["state_create", ""],

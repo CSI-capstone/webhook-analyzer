@@ -1,0 +1,17 @@
+{
+  "python": "3.12.14",
+  "fastapi": "0.135.1",
+  "uvicorn": "0.42.0",
+  "requests": "2.32.5",
+  "httpx": "0.28.1 (optional test dependency)",
+  "python_tests": 63,
+  "failures": 0,
+  "errors": 0,
+  "integration_checks": 22,
+  "integration_exit": 0,
+  "frontend_checks": 31,
+  "python_310_syntax": "PASS",
+  "browser_visual_checks": "desktop + 390x844 iframe; actual API result replay",
+  "browser_continuous_end_to_end": false,
+  "os_print_dialog_tested": false
+}
