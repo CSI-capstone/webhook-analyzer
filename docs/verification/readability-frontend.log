@@ -1,0 +1,6 @@
+2026-10-20 UI readability revision
+Command: node tests/check_frontend.cjs
+PASS: 31 frontend checks (status semantics, escaping, source evidence, filters, guides, print, inputs)
+
+Product code change: frontend/index.html CSS and inline display sizes.
+Python and integration suites were passed in the previous UI revision and were not rerun for this CSS revision.

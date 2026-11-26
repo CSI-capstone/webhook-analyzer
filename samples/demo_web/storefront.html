@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>HookLens 시연 스토어</title>
+  <link rel="stylesheet" href="/demo-assets/storefront.css">
+  <script id="demo-config" type="application/json">__DEMO_CONFIG__</script>
+  <script src="/demo-assets/storefront.js" defer></script>
+</head>
+<body>
+  <div class="announcement"><span>HookLens 졸업전시</span><span>모든 주문과 결제는 로컬 시연용입니다. 실제 금액은 청구되지 않습니다.</span><span class="announcement-end">DEMO STORE</span></div>
+  <header class="site-header">
+    <a class="wordmark" href="#" aria-label="스토어 홈"><span id="brandMark" class="brand-mark">D</span><span id="brandName">STORE</span><span class="wordmark-dot">·</span></a>
+    <nav aria-label="스토어 메뉴"><a href="#collection">컬렉션</a><a href="#orders">주문 내역</a><a href="#demoPanel" id="openDemo">시연 관리</a></nav>
+    <div class="header-actions"><span class="account"><span class="avatar">D</span>체험 계정</span><button id="openCart" class="cart-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12l1 14H5L6 7Zm3 0V5a3 3 0 0 1 6 0v2"/></svg>장바구니 <span id="cartCount">0</span></button></div>
+  </header>
+  <main>
+    <section class="hero" aria-labelledby="heroTitle">
+      <div class="hero-copy"><p class="eyebrow" id="heroEyebrow"></p><h1 id="heroTitle"></h1><p class="hero-description" id="heroDescription"></p><a class="primary hero-cta" href="#collection">컬렉션 둘러보기 <span aria-hidden="true">↗</span></a><div class="hero-note"><span class="little-dot"></span>시연 상품 · 캠퍼스/팀 수령 가능</div></div>
+      <div class="hero-art"><div class="art-orbit"></div><div class="art-caption" id="heroBadge"></div><svg class="hero-product" viewBox="0 0 300 240" aria-label="컬렉션 대표 후디"><use href="/demo-assets/products.svg#hoodie"/></svg><div class="art-sticker"><span>EVERYDAY<br>ESSENTIALS</span><span class="sticker-star">✳</span></div><span class="art-index">01 — THE COLLECTION</span></div>
+    </section>
+    <div class="benefits"><span><i>01</i> 서버에서 확인하는 주문 금액</span><span><i>02</i> 50,000원 이상 모의 배송비 무료</span><span><i>03</i> 결제 알림 수신 후 주문 상태 반영</span></div>
+    <section class="collection section-wrap" id="collection">
+      <div class="section-heading"><div><p class="eyebrow">CURATED FOR YOU</p><h2 id="collectionTitle">컬렉션</h2></div><span class="section-description">지금 곁에 두고 싶은 물건들</span></div>
+      <div class="collection-toolbar"><div id="categoryFilters" class="filter-tabs" aria-label="상품 분류"></div><span id="productCount" class="muted"></span></div>
+      <div id="productGrid" class="product-grid" aria-live="polite"><p class="loading">상품을 불러오는 중입니다.</p></div>
+    </section>
+    <section class="story-strip"><span class="story-symbol">✳</span><div><p class="eyebrow">MADE TO BE PART OF YOUR DAY</p><h2>작은 선택이 만드는, 조금 더 좋은 일상.</h2></div><span id="storyBrand">DEMO COLLECTION</span></section>
+    <section class="section-wrap orders-section" id="orders">
+      <div class="section-heading"><div><p class="eyebrow">YOUR ORDERS</p><h2>나의 주문</h2></div><button class="text-button" id="refreshOrders" type="button">새로고침 ↻</button></div>
+      <div class="order-overview"><div><span>전체 주문</span><strong id="statTotal">0</strong></div><div><span id="processedLabel">처리 완료</span><strong id="statProcessed">0</strong></div><div><span>처리 대기</span><strong id="statPending">0</strong></div><p id="orderHelp">주문을 만들고 모의 결제를 진행해 보세요. 수신 서버의 실제 상태가 표시됩니다.</p></div>
+      <div class="orders-toolbar"><div class="filter-tabs" id="orderFilters"><button class="active" data-order-filter="all" type="button">전체</button><button data-order-filter="pending" type="button">처리 대기</button><button data-order-filter="done" type="button">처리 완료</button></div><label class="search-label"><span class="sr-only">주문 검색</span><input type="search" id="orderSearch" placeholder="주문번호 또는 상품명 검색"></label></div>
+      <div id="orderList" class="order-list" aria-live="polite"></div>
+      <aside id="teamFeed" class="team-feed" hidden><div class="team-channel"><span class="channel-avatar">#</span><div><strong>team-orders</strong><p>팀 굿즈 주문 알림 채널 · 로컬 모의 수신</p></div><span class="channel-live"><i></i> LIVE</span></div><div id="teamMessages"></div></aside>
+    </section>
+    <section class="section-wrap demo-section">
+      <details id="demoPanel" class="demo-panel">
+        <summary><span><span class="console-kicker">EXHIBITION CONSOLE</span><strong>웹훅 시연 관리</strong></span><span class="summary-tail">정상 처리와 보안 시험 비교 <span aria-hidden="true">＋</span></span></summary>
+        <div class="console-content"><p class="console-intro" id="consoleIntro">같은 수신 서버에 정상 알림과 시험 요청을 보냅니다. 아래 기록은 실제 핸들러의 응답과 상태 변화입니다.</p>
+          <div class="console-controls"><label>수신 경로<select id="targetRoute"></select></label><label>시험 대상 주문<select id="targetOrder"></select></label><label class="checkbox-label"><input id="newTestOrder" type="checkbox" checked>매번 새 시험 주문 사용</label></div>
+          <div class="scenario-buttons"><button data-scenario="normal" type="button"><span class="scenario-icon">✓</span><strong>정상 알림</strong><small>현재 시각 · 유효한 서명</small></button><button data-scenario="expired" type="button"><span class="scenario-icon">◷</span><strong>만료 알림</strong><small>6분 전 시각 · 유효한 서명</small></button><button data-scenario="invalid_signature" type="button"><span class="scenario-icon">≠</span><strong>잘못된 서명</strong><small>인증값을 바꾼 시험 요청</small></button><button data-scenario="missing_signature" type="button"><span class="scenario-icon">∅</span><strong>서명 누락</strong><small>서명 헤더 없이 전송</small></button></div>
+          <div id="evidence" class="evidence empty-evidence">시험 요청을 보내면 HTTP 응답과 처리 전후 상태가 여기에 표시됩니다.</div>
+          <details class="raw-details"><summary>실제 요청·응답 자세히 보기</summary><pre id="requestPreview">아직 보낸 요청이 없습니다.</pre></details>
+          <div class="history-heading"><h3>화면에서 보낸 요청 기록</h3><button id="resetDemo" class="text-button danger-text" type="button">시연 데이터 초기화</button></div><div id="deliveryHistory" class="delivery-history"></div>
+          <p class="console-footnote">서명 키는 서버에서만 사용합니다. HookLens 분석기가 별도로 보낸 요청의 결과도 위 주문 목록에 반영됩니다. 이 요청 기록에는 현재 화면의 모의 발신기로 보낸 내역을 표시합니다.</p>
+        </div>
+      </details>
+    </section>
+  </main>
+  <footer class="site-footer"><div><strong id="footerBrand">STORE</strong><p>좋아하는 물건을 고르는 시간.</p></div><div><strong>LOCAL DEMONSTRATION</strong><p>실제 서비스 계정·카드 정보 없이 체험합니다.<br>재시작하면 모든 시연 주문이 초기화됩니다.</p></div><a href="http://127.0.0.1:8001" target="_blank" rel="noopener">HookLens 분석 화면 ↗</a></footer>
+  <dialog id="checkoutDialog" class="checkout-dialog"><div class="dialog-heading"><div><p class="eyebrow">YOUR SELECTION</p><h2>주문서</h2></div><button type="button" class="icon-close" data-close="checkoutDialog" aria-label="주문서 닫기">×</button></div><div class="checkout-layout"><div class="cart-summary"><div id="cartItems"></div><div class="cart-totals"><div><span>상품 금액</span><strong id="cartSubtotal">0원</strong></div><div><span>모의 배송비</span><strong id="cartShipping">0원</strong></div><div class="total-line"><span>예상 결제 금액</span><strong id="cartTotal">0원</strong></div></div><p class="muted checkout-price-note">주문 시 상품 가격과 수량을 서버에서 다시 확인합니다.</p></div><form id="checkoutForm"><h3>주문자 정보</h3><p class="form-help">시연용 정보가 미리 입력되어 있습니다.</p><label>이름<input id="buyerName" name="name" maxlength="40" value="체험 고객" required autocomplete="off"></label><label>이메일<input id="buyerEmail" name="email" type="email" maxlength="100" value="demo@example.test" required autocomplete="off"></label><fieldset><legend>수령 방법</legend><label class="radio-tile"><input type="radio" name="delivery" value="pickup" checked><span>직접 수령<small>캠퍼스 / 팀 오피스 · 무료</small></span></label><label class="radio-tile"><input type="radio" name="delivery" value="shipping"><span>모의 택배 배송<small>50,000원 미만 3,000원</small></span></label></fieldset><label id="addressLabel" hidden>수령지<input id="buyerAddress" name="address" maxlength="200" value="시연용 가상 수령지" autocomplete="off"></label><button class="primary full-button" id="createOrderButton" type="submit">주문 생성하기 <span>→</span></button><p class="form-footnote">실제 결제나 배송이 발생하지 않는 로컬 시연입니다.</p><p id="checkoutError" class="form-error" role="alert"></p></form></div></dialog>
+  <dialog id="paymentDialog" class="payment-dialog"><div class="dialog-heading"><div class="mock-pay-brand"><span class="payment-logo">P</span><div><strong>MOCK PAY</strong><small>HookLens 시연 결제창</small></div></div><button type="button" class="icon-close" data-close="paymentDialog" aria-label="결제창 닫기">×</button></div><span class="demo-badge">실제 청구 없음</span><h2 id="paymentProduct">주문 상품</h2><p class="payment-order-id" id="paymentOrderId"></p><strong class="payment-amount" id="paymentAmount">0원</strong><p class="payment-description">모의 승인 후 서버로 서명된 알림을 보내고, 수신 처리 결과를 확인합니다.</p><form id="paymentForm"><fieldset><legend>시연용 결제 수단</legend><label class="radio-tile"><input type="radio" name="method" value="demo_card" checked><span>가상 카드<small>카드번호·CVC를 입력하지 않습니다.</small></span><span class="mini-card">DEMO</span></label><label class="radio-tile"><input type="radio" name="method" value="demo_bank"><span>가상 계좌이체<small>실제 계좌 연결 없이 처리합니다.</small></span></label></fieldset><button class="primary full-button" id="approvePayment" type="submit">모의 결제 승인하기 <span>→</span></button><p id="paymentError" class="form-error" role="alert"></p></form></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

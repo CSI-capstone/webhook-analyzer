@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-28",
+  "brand": "HookLens",
+  "non_document_files_compared": 30,
+  "product_files_changed": [
+    "README.md",
+    "app.py",
+    "frontend/index.html",
+    "samples/shop_server.py",
+    "samples/vulnerable_zip/vulnerable_shop_server.py"
+  ],
+  "allowed_changes": "Literal brand text replacement and FastAPI documentation title only",
+  "frontend_checks_passed": 31,
+  "changed_python_files_syntax": "passed",
+  "analyzer_bytes_unchanged": true,
+  "browser_retest": false,
+  "full_python_suite_rerun": false
+}

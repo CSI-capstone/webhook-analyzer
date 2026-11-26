@@ -172,10 +172,7 @@ def _generate_mock_payload(platform_name: str, order_id: str,
 
     elif platform_name in ("토스페이먼츠", "toss", "toss_payments", "TOSS_PAYMENTS"):
         payload = {
-            "eventType": "payout.changed",
-            "eventId": f"evt_{order_id}",
-            "entityType": "payout",
-            "entityBody": {"id": f"payout_{order_id}", "status": "COMPLETED"},
+            "eventType": "PAYMENT_STATUS_CHANGED",
             "createdAt": ts_iso,
             "data": {
                 "paymentKey": f"paykey_{order_id}",

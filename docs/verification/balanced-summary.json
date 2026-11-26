@@ -1,0 +1,20 @@
+{
+  "revision": "balanced",
+  "frontend_checks_passed": 31,
+  "font_size_only_against_first_ui": true,
+  "layout_and_icon_values_identical_to_first_ui": true,
+  "desktop": {
+    "body_font": "15px",
+    "metric_font": "29px",
+    "sidebar_width_px": 218,
+    "body_width_px": 1348,
+    "scroll_width_px": 1348
+  },
+  "iframe_390px": {
+    "setup_body_width_px": 375,
+    "setup_scroll_width_px": 375,
+    "results_body_width_px": 375,
+    "results_scroll_width_px": 375
+  },
+  "data": "Recorded actual API responses replayed in private QA; no new full browser-to-live-API test"
+}

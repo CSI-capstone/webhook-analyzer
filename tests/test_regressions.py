@@ -45,6 +45,21 @@ class StaticRegressions(unittest.TestCase):
     def test_ignored_compare_result(self):
         self.assertTrue(self.has_rule(source("hmac.compare_digest(signature,'expected')\nreturn {'processed':True}"),'WHSEC-001'))
 
+    def test_any_signature_match_is_used_to_reject_invalid_requests(self):
+        for comparison in ("received_signature == expected", "hmac.compare_digest(received_signature, expected)"):
+            with self.subTest(comparison=comparison):
+                text=source("expected=b'computed'\nsignatures=[signature]\nif not any(" + comparison + " for received_signature in signatures):\n    raise ValueError('reject')\nreturn {}")
+                self.assertFalse(self.has_rule(text,'WHSEC-001'))
+
+    def test_any_inequality_is_not_signature_verification(self):
+        text=source("expected=b'computed'\nsignatures=[signature]\nif not any(received_signature != expected for received_signature in signatures):\n    raise ValueError('reject')\nreturn {}")
+        self.assertTrue(self.has_rule(text,'WHSEC-001'))
+
+    def test_all_or_ignored_any_match_is_not_trusted(self):
+        for body in ("all(hmac.compare_digest(signature, b'computed') for _ in [])\nreturn {}",
+                     "any(hmac.compare_digest(signature, b'computed') for _ in [1])\nreturn {}"):
+            self.assertTrue(self.has_rule(source(body),'WHSEC-001'))
+
     def test_logging_clock_does_not_validate_timestamp(self):
         text=source("print(time.time())\nif not hmac.compare_digest(signature,'expected'):\n    raise ValueError('reject')\nreturn {'processed':True}")
         self.assertTrue(self.has_rule(text,'WHSEC-004'))
@@ -258,10 +273,12 @@ class SignatureVectors(unittest.TestCase):
                 try: self.assertEqual(engine._make_signature(key,body,ts,message_id='evt_test'),expected)
                 finally: engine.close()
 
-    def test_toss_payload_is_signed_event_family(self):
+    def test_toss_payload_is_payment_status_event(self):
         value=json.loads(_generate_mock_payload('toss','order1',1700000000))
-        self.assertEqual(value['eventType'],'payout.changed')
-        self.assertIn('entityBody',value)
+        self.assertEqual(value['eventType'],'PAYMENT_STATUS_CHANGED')
+        self.assertEqual(value['data']['orderId'],'order1')
+        self.assertEqual(value['data']['status'],'DONE')
+        self.assertNotIn('entityBody',value)
         self.assertTrue(value['createdAt'].endswith('+00:00'))
 
 

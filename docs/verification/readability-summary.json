@@ -1,0 +1,38 @@
+{
+  "revision": "readability",
+  "date": "2026-10-20",
+  "frontend_checks_passed": 31,
+  "python_suite_rerun": false,
+  "integration_suite_rerun": false,
+  "browser_qa": {
+    "data": "Recorded responses from the prior actual API tests, replayed in a private QA page",
+    "desktop": [
+      "setup",
+      "overview",
+      "source context",
+      "dynamic cases",
+      "fix guide"
+    ],
+    "iframe_widths_px": [
+      900,
+      390
+    ],
+    "iframe_height_px": 900,
+    "horizontal_overflow": {
+      "900px": {
+        "clientWidth": 885,
+        "scrollWidth": 885
+      },
+      "390px": {
+        "clientWidth": 375,
+        "scrollWidth": 375
+      }
+    },
+    "desktop_small_text_below_14px": []
+  },
+  "limitations": [
+    "No full browser upload-to-live-API chain in this revision",
+    "No real mobile-device or cross-browser validation",
+    "QA assets excluded from product ZIP"
+  ]
+}

@@ -1209,6 +1209,36 @@
         margin-bottom: 12px;
         overflow: hidden;
       }
+      .result-explanation {
+        border: 1px solid #dce5f5;
+        border-radius: 10px;
+        background: #f7f9fd;
+        padding: 16px 18px;
+        margin-bottom: 22px;
+      }
+      .result-explanation.risk {
+        border-color: #f0d1c8;
+        background: #fff7f3;
+      }
+      .result-explanation.review {
+        border-color: #efddb5;
+        background: #fffaf0;
+      }
+      .result-explanation.checked {
+        border-color: #c9e2d8;
+        background: #f4faf7;
+      }
+      .result-explanation h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        line-height: 1.6;
+      }
+      .result-explanation p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.8;
+        color: #52627a;
+      }
       .finding summary {
         list-style: none;
         display: flex;
@@ -2483,9 +2513,20 @@
         skipped: "생략",
       };
       const ATTACK_LABELS = {
-        downgrade: "다운그레이드·서명 정책",
-        replay: "재전송",
-        type_confusion: "타입 혼동·입력 정책",
+        downgrade: "서명 검증·알고리즘 정책",
+        replay: "시간 검증·재전송",
+        type_confusion: "입력 형식·타입 정책",
+      };
+      const VARIANT_LABELS = {
+        invalid_signature: "잘못된 서명",
+        missing_signature: "서명 누락",
+        sha1: "SHA1 서명",
+        md5: "MD5 서명",
+        sha1_legacy: "레거시 SHA1 헤더",
+        expired_timestamp: "만료된 시간값",
+        timestamp_header_refresh: "시간 헤더만 갱신",
+        text_plain: "text/plain 전송",
+        array_body: "JSON 배열 본문",
       };
       function escHtml(value) {
         return value == null
@@ -2694,7 +2735,7 @@ ${data.files_analyzed?.length ? `<div class="file-list">분석 파일 · ${data.
             ? "Tier 1 · 상태 교차 검증"
             : "Tier 2 · HTTP 관측"
           : "동적 시험 미실행";
-        return `<div class="detail-heading"><h2 class="endpoint-title">${escHtml(ep.path)}</h2><div class="detail-meta">${severityBadge(ep.overall_severity)}<span class="pill">${escHtml(ep.platform?.platform || "일반 HMAC")}</span><span class="pill">${tier}</span>${ep.overall_cvss ? `<span class="pill">참고 위험도 ${number(ep.overall_cvss).toFixed(1)}</span>` : ""}</div></div><div class="tabs" role="tablist" aria-label="분석 상세"><button class="tab-button ${ui.tab === "overview" ? "active" : ""}" role="tab" id="tab-overview" aria-controls="tab-panel" tabindex="${ui.tab === "overview" ? 0 : -1}" aria-selected="${ui.tab === "overview"}" data-tab="overview">분석 요약</button><button class="tab-button ${ui.tab === "sast" ? "active" : ""}" role="tab" id="tab-sast" aria-controls="tab-panel" tabindex="${ui.tab === "sast" ? 0 : -1}" aria-selected="${ui.tab === "sast"}" data-tab="sast">정적 분석 <span class="tab-count">${findings.length}</span></button><button class="tab-button ${ui.tab === "dast" ? "active" : ""}" role="tab" id="tab-dast" aria-controls="tab-panel" tabindex="${ui.tab === "dast" ? 0 : -1}" aria-selected="${ui.tab === "dast"}" data-tab="dast">동적 시험 <span class="tab-count">${attacks.length}</span></button><button class="tab-button ${ui.tab === "fix" ? "active" : ""}" role="tab" id="tab-fix" aria-controls="tab-panel" tabindex="${ui.tab === "fix" ? 0 : -1}" aria-selected="${ui.tab === "fix"}" data-tab="fix">수정 가이드</button></div><div class="detail-content" id="tab-panel" role="tabpanel" aria-labelledby="tab-${ui.tab}">${ui.tab === "sast" ? renderSAST(findings, index, ep.platform?.platform) : ui.tab === "dast" ? renderDAST(attacks, ep.dast_confidence, ep.combined_note) : ui.tab === "fix" ? renderFixes(findings, index, ep.platform?.platform) : renderOverview(ep)}</div>`;
+        return `<div class="detail-heading"><h2 class="endpoint-title">${escHtml(ep.path)}</h2><div class="detail-meta">${severityBadge(ep.overall_severity)}<span class="pill">${escHtml(ep.platform?.platform || "일반 HMAC")}</span><span class="pill">${tier}</span></div></div><div class="tabs" role="tablist" aria-label="분석 상세"><button class="tab-button ${ui.tab === "overview" ? "active" : ""}" role="tab" id="tab-overview" aria-controls="tab-panel" tabindex="${ui.tab === "overview" ? 0 : -1}" aria-selected="${ui.tab === "overview"}" data-tab="overview">분석 요약</button><button class="tab-button ${ui.tab === "sast" ? "active" : ""}" role="tab" id="tab-sast" aria-controls="tab-panel" tabindex="${ui.tab === "sast" ? 0 : -1}" aria-selected="${ui.tab === "sast"}" data-tab="sast">정적 분석 <span class="tab-count">${findings.length}</span></button><button class="tab-button ${ui.tab === "dast" ? "active" : ""}" role="tab" id="tab-dast" aria-controls="tab-panel" tabindex="${ui.tab === "dast" ? 0 : -1}" aria-selected="${ui.tab === "dast"}" data-tab="dast">동적 시험 <span class="tab-count">${attacks.length}</span></button><button class="tab-button ${ui.tab === "fix" ? "active" : ""}" role="tab" id="tab-fix" aria-controls="tab-panel" tabindex="${ui.tab === "fix" ? 0 : -1}" aria-selected="${ui.tab === "fix"}" data-tab="fix">수정 가이드</button></div><div class="detail-content" id="tab-panel" role="tabpanel" aria-labelledby="tab-${ui.tab}">${ui.tab === "sast" ? renderSAST(findings, index, ep.platform?.platform) : ui.tab === "dast" ? renderDAST(attacks, ep.dast_confidence, ep.combined_note) : ui.tab === "fix" ? renderFixes(findings, index, ep.platform?.platform) : renderOverview(ep)}</div>`;
       }
       function renderProbe(probe) {
         if (!probe)
@@ -2708,7 +2749,7 @@ ${data.files_analyzed?.length ? `<div class="file-list">분석 파일 · ${data.
           ["정상 서명 기준", probe.step3_code],
           ["상태 조회", probe.step4_state_ok ? "확인" : "미확인"],
         ];
-        return `${probe.validation_error ? `<div class="notice">${escHtml(probe.validation_error)}</div>` : ""}<div class="probe-grid">${steps.map(([title, value], i) => `<div class="probe-step"><span class="number">STEP 0${i + 1}</span><b>${title}</b><strong class="${i === 2 ? (probe.baseline_valid ? "ok" : "warn") : ""}">${typeof value === "number" ? (value ? "HTTP " + number(value) : "응답 없음") : escHtml(value)}</strong></div>`).join("")}</div><p class="field-note" style="margin-top:10px">정상 기준 요청: ${probe.baseline_valid ? "HTTP 수락 확인" : "성립하지 않음 · 결과 해석에 추가 확인 필요"}</p>`;
+        return `${probe.validation_error ? `<div class="notice">${escHtml(probe.validation_error)}</div>` : ""}<div class="probe-grid">${steps.map(([title, value], i) => `<div class="probe-step"><span class="number">STEP 0${i + 1}</span><b>${title}</b><strong class="${i === 2 ? (probe.baseline_valid ? "ok" : "warn") : ""}">${typeof value === "number" ? (value ? "HTTP " + number(value) : "응답 없음") : escHtml(value)}</strong></div>`).join("")}</div><p class="field-note" style="margin-top:10px">정상 기준 요청: ${probe.baseline_valid ? "HTTP 수락 확인" : "성립하지 않음 · 결과 해석에 추가 확인 필요"}<br>서명이 없거나 잘못된 요청의 HTTP 401·403은 정상적인 거부입니다.</p>`;
       }
       function groupStatus(results) {
         if (results.some((a) => attackStatus(a) === "vulnerable"))
@@ -2723,13 +2764,40 @@ ${data.files_analyzed?.length ? `<div class="file-list">분석 파일 · ${data.
           return "rejected";
         return "inconclusive";
       }
+      function resultExplanation(ep) {
+        const findings = ep.sast_findings || [];
+        const riskCount = findings.filter((f) => severity(f.severity) !== "INFO").length;
+        const attacks = ep.dast_results || [];
+        const confirmed = attacks.filter((a) => attackStatus(a) === "vulnerable" && a.state_changed);
+        if (ep.probe && !ep.probe.baseline_valid)
+          return { tone: "review", title: "정상 요청이 실패해 동적 판단을 보류했습니다", text: "시크릿 키·서명 형식·서버 주소와 업로드 파일을 확인하세요. 시험 요청이 거부됐다는 사실만으로 방어가 정상이라고 판단할 수 없습니다." };
+        if (confirmed.some((a) => a.variant === "expired_timestamp"))
+          return { tone: "risk", title: "만료된 요청도 처리했습니다", text: "허용 시간을 지난 요청이 유효한 서명만으로 수락되어, 해당 시험 대상의 상태가 바뀌었습니다. 서명 확인과 함께 요청의 유효 시간을 검사해야 합니다." };
+        if (confirmed.length)
+          return { tone: "risk", title: "차단해야 할 시험 요청이 처리되었습니다", text: "시험 정책을 위반한 요청의 수락과 해당 시험 대상의 상태 변경을 함께 확인했습니다. 아래 동적 시험에서 요청 조건과 실행 근거를 확인하세요." };
+        if (ep.analysis_status === "partial" || findings.some((f) => severity(f.severity) === "INFO") || attacks.some((a) => ["observed", "inconclusive", "skipped"].includes(attackStatus(a))))
+          return { tone: "review", title: "추가 확인이 필요한 항목이 남아 있습니다", text: "요청 수락만 관측했거나 판단하지 못한 항목·생략된 시험이 있습니다. 정적 분석과 각 시험의 실행 근거를 함께 확인하세요." };
+        if (!attacks.length)
+          return riskCount
+            ? { tone: "review", title: "코드에서 검토할 위험 징후가 있습니다", text: "정적 분석으로 발견한 코드 패턴입니다. 동적 시험을 실행하지 않았으므로 실제 요청의 수락·거부나 상태 변경까지 검증한 결과는 아닙니다." }
+            : { tone: "neutral", title: "정적 점검 범위에서 위험 징후를 찾지 못했습니다", text: "지원하는 코드 패턴에 대한 결과입니다. 실제 요청을 보내는 동적 시험은 실행하지 않았습니다." };
+        if (ep.probe?.baseline_valid && attacks.every((a) => attackStatus(a) === "rejected"))
+          return riskCount
+            ? { tone: "review", title: "시험 요청은 거부했지만 코드 검토가 필요합니다", text: `정상 요청은 수락하고 실행한 시험 요청은 거부했습니다. 별도로 발견한 정적 위험 징후 ${riskCount}건은 코드와 수정 가이드에서 검토하세요.` }
+            : { tone: "checked", title: "실행한 시험 요청을 모두 거부했습니다", text: "정상 서명 요청은 수락하고 이번 시험 요청은 거부했습니다. 실행한 점검 범위의 결과이며 전체 서비스의 안전을 보증하지 않습니다." };
+        return { tone: "review", title: "시험 조건과 처리 근거를 확인해야 합니다", text: "이 결과만으로 방어가 정상이라고 단정할 수 없습니다. 정상 요청 기준과 각 시험의 응답·상태 변경 근거를 확인하세요." };
+      }
+      function renderExplanation(ep) {
+        const explanation = resultExplanation(ep);
+        return `<section class="result-explanation ${explanation.tone}" aria-label="결과 설명"><h3>${escHtml(explanation.title)}</h3><p>${escHtml(explanation.text)}</p></section>`;
+      }
       function renderOverview(ep) {
         const findings = ep.sast_findings || [];
         const attacks = ep.dast_results || [];
         const doc = PLATFORM_DOCS[ep.platform?.platform];
-        return `${ep.combined_note ? `<div class="evidence-banner">${icon("shield")}<span>${escHtml(ep.combined_note)}</span></div>` : ""}<div class="overview-section"><div class="section-title"><h3>정상 요청 기준 확인</h3><small>Probe · 4단계</small></div>${renderProbe(ep.probe)}</div><div class="overview-section"><div class="section-title"><h3>코드에서 발견한 항목</h3><button class="link-button" data-tab="sast">정적 분석 보기 →</button></div>${findings.length ? findings.map((f) => `<div class="finding-summary">${severityBadge(f.severity)}<span>${escHtml(f.rule_name || f.rule_id)}</span><small>L${number(f.lineno)}</small></div>`).join("") : emptyState("지원하는 정적 규칙에서 위험 징후 미탐지")}</div><div class="overview-section"><div class="section-title"><h3>동적 시나리오</h3><button class="link-button" data-tab="dast">시험 근거 보기 →</button></div>${
+        return `${renderExplanation(ep)}${ep.combined_note ? `<div class="evidence-banner">${icon("shield")}<span>${escHtml(ep.combined_note)}</span></div>` : ""}<div class="overview-section"><div class="section-title"><h3>정상 요청 기준 확인</h3><small>Probe · 4단계</small></div>${renderProbe(ep.probe)}</div><div class="overview-section"><div class="section-title"><h3>코드에서 발견한 항목</h3><button class="link-button" data-tab="sast">정적 분석 보기 →</button></div>${findings.length ? findings.map((f) => `<div class="finding-summary">${severityBadge(f.severity)}<span>${escHtml(f.rule_name || f.rule_id)}</span><small>L${number(f.lineno)}</small></div>`).join("") : emptyState("지원하는 정적 규칙에서 위험 징후 미탐지")}</div><div class="overview-section"><div class="section-title"><h3>동적 시나리오</h3><button class="link-button" data-tab="dast">시험 근거 보기 →</button></div>${
           attacks.length
-            ? `<div class="mini-results">${Object.entries(ATTACK_LABELS)
+            ? `<p class="field-note" style="margin-bottom:12px">하위 시험 ${attacks.length}건 중 정책 위반 처리 증거 ${(attacks.filter((a) => attackStatus(a) === "vulnerable" && a.state_changed)).length}건입니다. 하위 시험 수는 취약점 종류의 수와 다릅니다.</p><div class="mini-results">${Object.entries(ATTACK_LABELS)
                 .map(([type, label]) => {
                   const group = attacks.filter((a) => a.attack_type === type);
                   return `<div class="mini-result"><b>${label}</b>${group.length ? stateLabel(groupStatus(group)) : '<span class="muted">미실행</span>'}<p>하위 시험 ${group.length}건</p></div>`;
@@ -2775,7 +2843,7 @@ ${data.files_analyzed?.length ? `<div class="file-list">분석 파일 · ${data.
                   String(f.filepath || "")
                     .split(/[\\/]/)
                     .pop(),
-              )} · L${number(f.lineno)}${f.handler_name ? " · " + escHtml(f.handler_name) + "()" : ""}</div>${sourcePanel(f)}${f.recommendation ? `<div class="recommendation"><strong>수정 방향</strong>${escHtml(f.recommendation)}</div>` : ""}<button class="link-button" data-tab="fix">수정 코드 예제 보기 →</button>${findingDoc(f, platform) ? `<div class="rule-doc">참고 · ${docLink(findingDoc(f, platform))}</div>` : ""}${f.cvss_score ? `<div class="score-note">규칙 참고 위험도 ${number(f.cvss_score).toFixed(1)} · 환경별 CVSS 산출값 아님</div>` : ""}</div></details>`,
+              )} · L${number(f.lineno)}${f.handler_name ? " · " + escHtml(f.handler_name) + "()" : ""}</div>${sourcePanel(f)}${f.recommendation ? `<div class="recommendation"><strong>수정 방향</strong>${escHtml(f.recommendation)}</div>` : ""}<button class="link-button" data-tab="fix">수정 코드 예제 보기 →</button>${findingDoc(f, platform) ? `<div class="rule-doc">참고 · ${docLink(findingDoc(f, platform))}</div>` : ""}</div></details>`,
           )
           .join("");
       }
@@ -2804,7 +2872,8 @@ ${data.files_analyzed?.length ? `<div class="file-list">분석 파일 · ${data.
       }
       function renderAttack(a) {
         const status = attackStatus(a);
-        return `<article class="dast-item ${status === "vulnerable" ? "vuln" : status === "rejected" ? "safe" : "pending"}"><div class="dast-item-heading">${stateLabel(status)}<span class="variant">${escHtml(a.variant || a.attack_type)}</span></div><p class="dast-desc">${escHtml(a.description)}</p><div class="dast-tags"><span class="pill mono">${a.status_code ? "HTTP " + number(a.status_code) : "HTTP 응답 미기록"}</span><span class="pill">${escHtml(a.tier || "관측 수준 미기록")}</span>${a.confidence ? `<span class="pill">신뢰도 ${escHtml(a.confidence)}</span>` : ""}</div>${a.state_changed ? `<div class="state-changed">${icon("check")}시험 대상의 상태 조회값 변경 확인</div>` : ""}${a.details?.length ? `<details ${status === "vulnerable" ? "open" : ""}><summary>실행 근거 ${a.details.length}건</summary><div class="dast-details mono">${a.details.map(escHtml).join("<br>")}</div></details>` : ""}</article>`;
+        const variant = Object.hasOwn(VARIANT_LABELS, a.variant) ? VARIANT_LABELS[a.variant] : a.variant || a.attack_type;
+        return `<article class="dast-item ${status === "vulnerable" ? "vuln" : status === "rejected" ? "safe" : "pending"}"><div class="dast-item-heading">${stateLabel(status)}<span class="variant">${escHtml(variant)}</span></div><p class="dast-desc">${escHtml(a.description)}</p><div class="dast-tags"><span class="pill mono">${a.status_code ? "HTTP " + number(a.status_code) : "HTTP 응답 미기록"}</span><span class="pill">${escHtml(a.tier || "관측 수준 미기록")}</span>${a.confidence ? `<span class="pill">신뢰도 ${escHtml(a.confidence)}</span>` : ""}</div>${a.state_changed ? `<div class="state-changed">${icon("check")}시험 대상의 상태 조회값 변경 확인</div>` : ""}${a.details?.length ? `<details ${status === "vulnerable" ? "open" : ""}><summary>실행 근거 ${a.details.length}건</summary><div class="dast-details mono">${a.details.map(escHtml).join("<br>")}</div></details>` : ""}</article>`;
       }
       function renderFixes(findings, index, platform) {
         const items = (findings || []).filter(
@@ -2895,7 +2964,7 @@ ${data.files_analyzed?.length ? `<div class="file-list">분석 파일 · ${data.
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
       function buildPrintReport(data) {
-        return `<h1>HookLens · 분석 리포트</h1><p>${escHtml(data.target_file)} · ${escHtml(data.overall_grade)} · ${number(data.elapsed_sec)}초</p><p>정적 위험 징후 ${number(data.total_sast_findings)}건 · 동적 처리 증거 ${number(data.total_dast_vulns)}건</p><p>관측 ${number(data.total_dast_observations)} · 판단 불가 ${number(data.total_dast_inconclusive)} · 생략 ${number(data.total_dast_skipped)}</p><p>지원하는 점검 범위의 결과이며 전체 안전을 보증하지 않습니다. 수치는 규칙 참고 위험도입니다.</p>${[...(data.analysis_warnings || []), ...(data.dast_warnings || []), ...(data.warning ? [data.warning] : [])].map((w) => `<p>${escHtml(w)}</p>`).join("")}${(data.endpoints || []).map((ep, i) => `<h2>${escHtml(ep.path)}</h2><p>${escHtml(ep.platform?.platform || "일반 HMAC")} · ${escHtml(ep.analysis_status)} · ${escHtml(ep.overall_severity)} · 참고 위험도 ${number(ep.overall_cvss).toFixed(1)}</p><h3>정적 분석</h3>${renderSAST(ep.sast_findings || [], i, ep.platform?.platform)}<h3>동적 시험</h3>${renderDAST(ep.dast_results || [], ep.dast_confidence, ep.combined_note)}<h3>수정 가이드</h3>${renderFixes(ep.sast_findings || [], i, ep.platform?.platform)}`).join("")}`;
+        return `<h1>HookLens · 분석 리포트</h1><p>${escHtml(data.target_file)} · ${escHtml(data.overall_grade)} · ${number(data.elapsed_sec)}초</p><p>정적 위험 징후 ${number(data.total_sast_findings)}건 · 동적 처리 증거 ${number(data.total_dast_vulns)}건</p><p>관측 ${number(data.total_dast_observations)} · 판단 불가 ${number(data.total_dast_inconclusive)} · 생략 ${number(data.total_dast_skipped)}</p><p>등급은 지원하는 점검 범위의 결과이며 전체 안전을 보증하지 않습니다.</p>${[...(data.analysis_warnings || []), ...(data.dast_warnings || []), ...(data.warning ? [data.warning] : [])].map((w) => `<p>${escHtml(w)}</p>`).join("")}${(data.endpoints || []).map((ep, i) => `<h2>${escHtml(ep.path)}</h2><p>${escHtml(ep.platform?.platform || "일반 HMAC")} · ${escHtml(ep.analysis_status)} · ${escHtml(ep.overall_severity)}</p>${renderExplanation(ep)}<h3>정적 분석</h3>${renderSAST(ep.sast_findings || [], i, ep.platform?.platform)}<h3>동적 시험</h3>${renderDAST(ep.dast_results || [], ep.dast_confidence, ep.combined_note)}<h3>수정 가이드</h3>${renderFixes(ep.sast_findings || [], i, ep.platform?.platform)}`).join("")}`;
       }
       function printReport() {
         if (!ui.report) return;
